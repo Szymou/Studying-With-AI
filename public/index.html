@@ -70,6 +70,9 @@
         .cfg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
         .cfg-item { background: #f7fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; }
         .cfg-item label { font-weight: bold; display: block; margin-bottom: 5px; color: #4a5568; }
+        .convo-item { padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; margin-bottom: 4px; color: #4a5568; word-break: break-all; }
+        .convo-item:hover { background: #edf2f7; }
+        .convo-item.active { background: #667eea; color: white; }
         .cfg-item .value { font-family: monospace; font-size: 13px; word-break: break-all; }
         .cfg-item input { width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 5px; font-family: monospace; font-size: 13px; }
         .cat-checkboxes { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -368,7 +371,7 @@
             try {
                 const qs = await api('GET', '/api/questions/random/5');
                 const hideInp = localStorage.getItem('hidePracticeInput') === 'true';
-                c.innerHTML = '<h2>随机练习 <button class="btn btn-ai" onclick="refreshPractice()" style="float:right;">🔄 刷新题目</button></h2>';
+                c.innerHTML = '<h2>随机练习 <button class="btn btn-ai" onclick="refreshPractice()" style="float:right;">🔄 刷新题目</button> <select id="pracLang" onchange="refreshPractice()" style="float:right;margin-right:8px;padding:6px;border:1px solid #e2e8f0;border-radius:5px;font-size:13px;"><option value="all">全部</option><option value="zh">中文</option><option value="en">English</option></select></h2>';
                 for (const q of qs) {
                     const div = document.createElement('div'); div.className = 'question-card';
                     div.innerHTML = '<div><span class="question-category">' + q.category + (q.subcategory?' - '+q.subcategory:'') + '</span><span class="question-title">' + q.question + '</span></div>' +
@@ -391,7 +394,7 @@
             const qs = await api('GET', '/api/questions/random/5');
             const c = document.getElementById('content');
             const hideInp = localStorage.getItem('hidePracticeInput') === 'true';
-            c.innerHTML = '<h2>随机练习 <button class="btn btn-ai" onclick="refreshPractice()" style="float:right;">🔄 刷新题目</button></h2>';
+            c.innerHTML = '<h2>随机练习 <button class="btn btn-ai" onclick="refreshPractice()" style="float:right;">🔄 刷新题目</button> <select id="pracLang" onchange="refreshPractice()" style="float:right;margin-right:8px;padding:6px;border:1px solid #e2e8f0;border-radius:5px;font-size:13px;"><option value="all">全部</option><option value="zh">中文</option><option value="en">English</option></select></h2>';
             for (const q of qs) {
                 const div = document.createElement('div'); div.className = 'question-card';
                 div.innerHTML = '<div><span class="question-category">' + q.category + (q.subcategory?' - '+q.subcategory:'') + '</span><span class="question-title">' + q.question + '</span></div>' +
@@ -445,6 +448,7 @@
                 c.innerHTML = '<h2>题目搜索</h2><div class="form-group"><label>分类（可多选）</label><div class="cat-checkboxes" id="catBoxes">' +
                     cats.map(cat => '<label onclick="toggleCat(this)"><input type="checkbox" value="' + cat + '" checked> ' + cat + '</label>').join('') +
                     '</div></div><div class="form-group"><label>关键词</label><input type="text" id="searchKw" placeholder="输入关键词" style="padding:8px;width:100%;border:1px solid #e2e8f0;border-radius:5px;"></div>' +
+                    '<div class="form-group"><label>语言</label><select id="searchLang" style="padding:8px;width:100%;border:1px solid #e2e8f0;border-radius:5px;" onchange="doSearch()"><option value="all">全部</option><option value="zh">中文</option><option value="en">English</option></select></div>' +
                     '<button class="btn btn-primary" onclick="doSearch()">搜索</button><div id="searchRes"></div></div>';
             } catch(e) { c.innerHTML = '<div class="loading">加载失败：' + e.message + '</div>'; }
         }
@@ -464,6 +468,11 @@
                 let qs = await api('GET', '/api/questions?limit=200');
                 qs = qs.filter(q => selectedCats.includes(q.category));
                 if (kw) qs = qs.filter(q => q.question.includes(kw));
+                const langFilter = document.getElementById('searchLang');
+                if (langFilter) {
+                    const lv = langFilter.value;
+                    if (lv !== 'all') qs = qs.filter(q => (q.lang || 'zh') === lv);
+                }
                 if (!qs.length) { res.innerHTML = '<p style="padding:20px;color:#718096;">未找到题目</p>'; return; }
                 res.innerHTML = '';
                 for (const q of qs.slice(0,30)) {
@@ -530,7 +539,7 @@
                 // 自定义题目（按创建时间倒序）显示在最前
                 for (const q of cqs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 20)) {
                     const d = document.createElement('div'); d.className = 'question-card';
-                    d.innerHTML = '<div><span class="question-category">✏️ ' + (q.category||'自定义') + '</span><strong>' + q.question + '</strong></div>' +
+                    d.innerHTML = '<div><span class="question-category">✏️ ' + (q.category||'自定义') + ' <span style="font-size:11px;color:#a0aec0;">' + (q.lang||'zh').toUpperCase() + '</span></span><strong>' + q.question + '</strong></div>' +
                         '<div class="btn-group" style="margin-top:8px;">' +
                         '<button class="btn btn-primary" onclick="showAns(' + q.id + ',this)">📖 答案</button>' +
                         '<button class="btn btn-ai" onclick="askAI(' + q.id + ",'" + q.question.replace(/'/g,"\\'") + "')\">🤖 AI</button></div>" +
@@ -540,7 +549,7 @@
                 // 系统题库
                 for (const q of qs.slice(0, 50 - Math.min(cqs.length, 20))) {
                     const d = document.createElement('div'); d.className = 'question-card';
-                    d.innerHTML = '<div><span class="question-category">' + q.category + '</span><strong>' + q.question + '</strong></div>' +
+                    d.innerHTML = '<div><span class="question-category">' + q.category + ' <span style="font-size:11px;color:#a0aec0;">' + (q.lang||'zh').toUpperCase() + '</span></span><strong>' + q.question + '</strong></div>' +
                         '<div class="btn-group" style="margin-top:8px;">' +
                         '<button class="btn btn-primary" onclick="showAns(' + q.id + ',this)">📖 答案</button>' +
                         '<button class="btn btn-ai" onclick="askAI(' + q.id + ",'" + q.question.replace(/'/g,"\\'") + "')\">🤖 AI</button></div>" +
@@ -613,8 +622,10 @@
         async function loadAIChat() {
             const c = document.getElementById('content');
             let convoId = null, messages = [];
+            let convos = [];
             try {
                 const list = await api('GET', '/api/ai/chat/list');
+                convos = list;
                 if (list.length > 0) {
                     const last = await api('GET', '/api/ai/chat/' + list[0].id);
                     convoId = last.id;
@@ -624,13 +635,20 @@
             const msgsHtml = messages.length
                 ? messages.map(m => '<div class="ai-msg ' + m.role + '"><div class="role">' + (m.role === 'user' ? '你' : 'AI') + '</div>' + renderMd(m.content) + '</div>').join('')
                 : '<div class="empty-state" style="padding:40px 20px;"><div class="icon">💬</div><p>输入Java问题，AI为你解答</p></div>';
+            const convoListHtml = '<div style="width:220px;min-width:220px;border-right:1px solid #e2e8f0;overflow-y:auto;padding:10px;background:#fafafa;">' +
+                '<button class="btn btn-ai" onclick="newChat()" style="width:100%;margin-bottom:10px;">+ 新对话</button>' +
+                (convos.length ? convos.map(cv => '<div class="convo-item"' + (cv.id === convoId ? ' active' : '') + '" onclick="switchChat(' + cv.id + ')">' + cv.title + '</div>').join('') : '<div style="color:#a0aec0;font-size:13px;text-align:center;">暂无记录</div>') +
+                '</div>';
             c.innerHTML = '<h2>🤖 AI 咨询</h2>' +
-                '<div class="ai-chat-box"><div class="ai-chat-msgs" id="aiMsgs">' + msgsHtml +
-                '</div><div class="ai-chat-input"><input id="aiInp" placeholder="输入你的Java问题..." onkeydown="if(event.key===\'Enter\') sendChat()"><button class="btn btn-ai" onclick="sendChat()">发送</button></div></div>';
+                '<div style="display:flex;gap:0;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">' + convoListHtml +
+                '<div class="ai-chat-box" style="border:none;border-radius:0;flex:1;height:60vh;"><div class="ai-chat-msgs" id="aiMsgs">' + msgsHtml +
+                '</div><div class="ai-chat-input"><input id="aiInp" placeholder="输入你的Java问题..." onkeydown="if(event.key===\'Enter\') sendChat()"><button class="btn btn-ai" onclick="sendChat()">发送</button></div></div></div>';
             const msgsDiv = document.getElementById('aiMsgs');
             if (msgsDiv) msgsDiv.scrollTop = msgsDiv.scrollHeight;
             window._aiConvoId = convoId;
+            window._aiConvos = convos;
         }
+        
         async function sendChat() {
             const inp = document.getElementById('aiInp');
             const msg = inp.value.trim();
@@ -648,12 +666,63 @@
                     convoId = newC.id;
                     window._aiConvoId = convoId;
                 }
-                const chatRes = await api('POST', '/api/ai/chat/' + convoId + '/message', { message: msg });
-                const full = chatRes.reply || '';
-                ad.innerHTML = full ? '<div class="role">AI</div>' + renderMd(full) : '<div class="role">AI</div>⚠️ 无回复';
-                msgs.scrollTop = msgs.scrollHeight;
+                // SSE 流式请求
+                const r = await fetch('http://localhost:7777/api/ai/chat/' + convoId + '/message/stream', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ message: msg })
+                });
+                if (!r.ok) throw new Error('请求失败 (' + r.status + ')');
+                const reader = r.body.getReader();
+                const dec = new TextDecoder();
+                let full = '', buf = '', first = true;
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buf += dec.decode(value, { stream: true });
+                    const lines = buf.split('\n');
+                    buf = lines.pop() || '';
+                    for (const ln of lines) {
+                        const s = ln.trim();
+                        if (!s.startsWith('data: ')) continue;
+                        const d = s.slice(6).trim();
+                        if (d === '[DONE]') continue;
+                        try {
+                            const p = JSON.parse(d);
+                            if (p.content) {
+                                full += p.content;
+                                if (first) { ad.innerHTML = '<div class="role">AI</div>'; first = false; }
+                                ad.innerHTML = '<div class="role">AI</div>' + renderMd(full);
+                                msgs.scrollTop = msgs.scrollHeight;
+                            } else if (p.error) {
+                                ad.innerHTML = '<div class="role">AI</div>⚠️ ' + p.error;
+                            }
+                        } catch(e) {}
+                    }
+                }
+                if (!full) ad.innerHTML = '<div class="role">AI</div>⚠️ 未收到有效回复';
             } catch(e) { ad.innerHTML = '<div class="role">AI</div>⚠️ ' + e.message; }
             finally { inp.disabled = false; inp.focus(); }
+        }
+
+        async function newChat() {
+            window._aiConvoId = null;
+            await loadAIChat();
+        }
+        async function switchChat(cid) {
+            try {
+                const data = await api('GET', '/api/ai/chat/' + cid);
+                window._aiConvoId = data.id;
+                const msgs = data.messages || [];
+                const msgsDiv = document.getElementById('aiMsgs');
+                if (msgsDiv) {
+                    msgsDiv.innerHTML = msgs.length
+                        ? msgs.map(m => '<div class="ai-msg ' + m.role + '"><div class="role">' + (m.role === 'user' ? '你' : 'AI') + '</div>' + renderMd(m.content) + '</div>').join('')
+                        : '<div class="empty-state" style="padding:40px 20px;"><div class="icon">💬</div><p>输入Java问题，AI为你解答</p></div>';
+                    msgsDiv.scrollTop = msgsDiv.scrollHeight;
+                }
+                // 更新侧边栏高亮
+                document.querySelectorAll('.convo-item').forEach(el => el.classList.toggle('active', parseInt(el.getAttribute('onclick')?.match(/\d+/)?.[0] || '0') === cid));
+            } catch(e) { toast('切换失败', '❌'); }
         }
 
         // ---- 设置 ----
