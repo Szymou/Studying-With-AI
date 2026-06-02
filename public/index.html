@@ -443,7 +443,12 @@
                 c.innerHTML = '<h2>❤️ 收藏（' + f.length + '题）</h2>';
                 for (const v of f) {
                     const d = document.createElement('div'); d.className = 'question-card';
-                    d.innerHTML = '<div class="fav-list-item"><div><span class="question-category">' + (v.category||'') + '</span><span class="question-title">' + v.question + '</span></div><button class="btn btn-danger" onclick="remFav(' + v.question_id + ',this)" style="font-size:12px;padding:4px 10px;">取消收藏</button></div>';
+                    d.innerHTML = '<div class="fav-list-item"><div><span class="question-category">' + (v.category||'') + '</span><span class="question-title">' + v.question + '</span></div>' +
+                        '<div class="btn-group" style="margin-top:8px;">' +
+                        '<button class="btn btn-primary" onclick="showAns(' + v.question_id + ',this)">📖 答案</button>' +
+                        '<button class="btn btn-ai" onclick="askAI(' + v.question_id + ',\'' + (v.question||'').replace(/'/g,"\\'") + '\')">🤖 AI</button>' +
+                        '<button class="btn btn-danger" onclick="remFav(' + v.question_id + ',this)" style="font-size:12px;padding:4px 10px;">取消收藏</button></div>' +
+                        '<div class="result" style="display:none;"></div>';
                     c.appendChild(d);
                 }
             } catch(e) { c.innerHTML = '<div class="loading">加载失败：' + e.message + '</div>'; }
@@ -459,7 +464,11 @@
         // ---- 管理题目 ----
         async function loadManage() {
             const c = document.getElementById('content');
-            c.innerHTML = '<h2>管理题目</h2><button class="btn btn-success" onclick="showAddQ()" style="margin-bottom:15px;">➕ 增加自定义题目</button><div id="mList"><div class="loading">加载中...</div></div>';
+            c.innerHTML = '<h2>管理题目</h2>' +
+                '<div class="btn-group" style="margin-bottom:15px;">' +
+                '<button class="btn btn-success" onclick="showAddQ()">➕ 增加自定义题目</button>' +
+                '<button class="btn btn-ai" onclick="showAIGenerate()">🤖 AI生成题目</button></div>' +
+                '<div id="mList"><div class="loading">加载中...</div></div>';
             try {
                 const qs = await api('GET', '/api/questions?limit=200');
                 const ml = document.getElementById('mList'); ml.innerHTML = '';
@@ -467,7 +476,9 @@
                     const d = document.createElement('div'); d.className = 'question-card';
                     d.innerHTML = '<div><span class="question-category">' + q.category + '</span><strong>' + q.question + '</strong></div>' +
                         '<div class="btn-group" style="margin-top:8px;">' +
-                        '<button class="btn btn-ai" onclick="askAI(' + q.id + ',\'' + q.question.replace(/'/g,"\\'") + '\')">🤖 AI获取答案</button></div>';
+                        '<button class="btn btn-primary" onclick="showAns(' + q.id + ',this)">📖 答案</button>' +
+                        '<button class="btn btn-ai" onclick="askAI(' + q.id + ",'" + q.question.replace(/'/g,"\\'") + "')\">🤖 AI</button></div>" +
+                        '<div class="result" style="display:none;"></div>';
                     ml.appendChild(d);
                 }
             } catch(e) { document.getElementById('mList').innerHTML = '<div class="loading">加载失败：' + e.message + '</div>'; }
@@ -496,6 +507,40 @@
                 document.getElementById('addQForm').remove();
                 loadManage();
             } catch(e) { toast('添加失败：' + e.message, '❌'); }
+        }
+
+        // ---- AI生成题目 ----
+        function showAIGenerate() {
+            if (document.getElementById('aiGenForm')) return;
+            const ml = document.getElementById('mList');
+            const form = document.createElement('div'); form.id = 'aiGenForm'; form.className = 'question-card';
+            form.innerHTML = '<h3>🤖 AI生成题目</h3>' +
+                '<div class="form-group"><label>主题（必填，如：ConcurrentHashMap、Spring事务）</label><input id="genTopic" placeholder="例如：JVM垃圾回收"></div>' +
+                '<div class="form-group"><label>数量（1-20）</label><input id="genCount" value="5" style="width:100px;"></div>' +
+                '<div class="btn-group">' +
+                '<button class="btn btn-ai" onclick="doAIGenerate()">✨ 生成</button>' +
+                '<button class="btn" onclick="this.parentElement.parentElement.remove()">取消</button></div>' +
+                '<div id="genResult" style="margin-top:10px;"></div>';
+            ml.parentElement.insertBefore(form, ml);
+        }
+
+        async function doAIGenerate() {
+            const topic = document.getElementById('genTopic').value;
+            const count = parseInt(document.getElementById('genCount').value) || 5;
+            if (!topic) { toast('请输入主题', '⚠️'); return; }
+            const res = document.getElementById('genResult');
+            res.innerHTML = '<span class="loading">🤖 AI生成中...</span>';
+            try {
+                const data = await api('POST', '/api/ai/generate', { topic, count, saveToCustom: true });
+                if (data.parsed) {
+                    res.innerHTML = '<div style="color:#48bb78;">✅ 成功生成 ' + data.count + ' 题，自动保存到自定义题库 ' + data.saved + ' 题</div>';
+                    toast('AI生成了 ' + data.count + ' 题', '✅');
+                } else {
+                    res.innerHTML = '<div style="color:#ed8936;">⚠️ AI返回格式异常，请重试</div><pre style="font-size:12px;background:#f7fafc;padding:10px;margin-top:5px;overflow:auto;">' + (data.raw || '') + '</pre>';
+                }
+            } catch(e) {
+                res.innerHTML = '<div style="color:#e53e3e;">❌ 生成失败：' + e.message + '</div>';
+            }
         }
 
         // ---- AI咨询 ----
