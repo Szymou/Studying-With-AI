@@ -194,17 +194,54 @@
             }
             openAiModal('🤖 AI思考中...', false);
             try {
+                // 使用流式请求
                 const response = await fetch('http://localhost:7777/api/ai/ask', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                    body: JSON.stringify({ question: questionText, userAnswer: userAnswer })
+                    body: JSON.stringify({ question: questionText, userAnswer: userAnswer, stream: true })
                 });
-                const data = await response.json();
-                if (data.error) throw new Error(data.error);
-                localStorage.setItem(cacheKey, data.answer);
-                const msg = forceRefresh ? '🔄 **刷新后的AI回答**（已更新缓存）：\n\n' : '📝 **本次AI回答**（已缓存）：\n\n';
-                openAiModal(msg + data.answer);
-                return data.answer;
+                if (!response.ok) throw new Error('请求失败');
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullContent = '';
+                let buffer = '';
+                let isFirstChunk = true;
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]') continue;
+                            try {
+                                const parsed = JSON.parse(data);
+                                if (parsed.content) {
+                                    fullContent += parsed.content;
+                                    // 实时渲染Markdown
+                                    if (isFirstChunk) {
+                                        openAiModal('', false);
+                                        isFirstChunk = false;
+                                    }
+                                    const modalContent = document.getElementById('aiModalContent');
+                                    modalContent.innerHTML = renderMarkdown(fullContent);
+                                } else if (parsed.error) {
+                                    throw new Error(parsed.error);
+                                }
+                            } catch (e) { /* 忽略解析错误 */ }
+                        }
+                    }
+                }
+                if (fullContent) {
+                    localStorage.setItem(cacheKey, fullContent);
+                    const msg = forceRefresh ? '🔄 **刷新后的AI回答**（已更新缓存）：\n\n' : '📝 **本次AI回答**（已缓存）：\n\n';
+                    openAiModal(msg + fullContent);
+                    return fullContent;
+                } else {
+                    throw new Error('未收到有效内容');
+                }
             } catch (err) {
                 openAiModal('⚠️ AI暂时不可用<br>' + err.message, false);
                 return null;
