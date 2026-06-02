@@ -495,7 +495,7 @@
                 const cqs = await api('GET', '/api/custom-questions');
                 const ml = document.getElementById('mList'); ml.innerHTML = '';
                 // 自定义题目（按创建时间倒序）显示在最前
-                for (const q of cqs.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 20)) {
+                for (const q of cqs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 20)) {
                     const d = document.createElement('div'); d.className = 'question-card';
                     d.innerHTML = '<div><span class="question-category">✏️ ' + (q.category||'自定义') + '</span><strong>' + q.question + '</strong></div>' +
                         '<div class="btn-group" style="margin-top:8px;">' +
