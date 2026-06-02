@@ -72,7 +72,7 @@ router.post('/ask', async (req, res) => {
         res.write('data: [DONE]\n\n');
         return res.end();
     }
-    const systemPrompt = '你是一个Java技术面试辅导专家，精通Java八股文。请用中文回答，**必须包含代码示例**。回答格式：先给出简洁解释，然后提供具体代码用例说明。';
+    const systemPrompt = '你是一个专家级的Java专家，知识广阔，教知识会举例子。';
     const userPrompt = userAnswer
         ? '问题：' + question + '\n用户的回答：' + userAnswer + '\n请评价是否正确，并给出标准答案（含代码示例）。'
         : '问题：' + question + '\n请给出详细准确的答案，包含具体代码示例说明原理。';
@@ -208,7 +208,7 @@ router.post('/chat/:id/message', async (req, res) => {
             return res.status(404).json({ error: '对话不存在' });
         const messages = JSON.parse(convo.messages || '[]');
         messages.push({ role: 'user', content: message });
-        const reply = await callAi([{ role: 'system', content: '你是一个Java技术面试辅导专家。' }, ...messages]);
+        const reply = await callAi([{ role: 'system', content: '你是一个专家级的Java专家，知识广阔，教知识会举例子。' }, ...messages]);
         messages.push({ role: 'assistant', content: reply });
         const firstUserMsg = messages.find((m) => m.role === 'user');
         const title = convo.title || (firstUserMsg ? firstUserMsg.content.substring(0, 30) : 'Java咨询');

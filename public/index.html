@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Java八股文学习系统 - AI增强版</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☕</text></svg>">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -104,6 +105,7 @@
     <div class="modal" id="aiModal">
         <div class="modal-content">
             <h2 id="aiModalTitle">🤖 AI 助手</h2>
+            <div id="aiModalQuestion" style="background:#f7fafc;padding:10px 14px;border-radius:8px;margin-bottom:10px;font-size:14px;color:#2d3748;display:none;"></div>
             <div id="aiModalContent" style="line-height: 1.6;">AI思考中...</div>
             <div class="modal-footer">
                 <button class="btn btn-fav" id="aiFavBtn" onclick="favCurrentQuestion()" style="display:none;">♡ 收藏本题</button>
@@ -193,6 +195,10 @@
             ).join('');
             const content = aiAnswers.length ? renderMd(aiAnswers[aiAnswers.length - 1].text) : '';
             document.getElementById('aiModalContent').innerHTML = '<div class="ans-tabs">' + tabsHtml + '</div><div>' + content + '</div>';
+            // 确保弹窗显示
+            document.getElementById('aiModal').style.display = 'flex';
+            // 显示收藏按钮
+            document.getElementById('aiFavBtn').style.display = currentAiQuestionId ? '' : 'none';
         }
 
         function switchAiTab(idx) {
@@ -204,6 +210,14 @@
         function openAiModal(c, isMd) {
             document.getElementById('aiModalContent').innerHTML = isMd ? renderMd(c) : c;
             document.getElementById('aiModal').style.display = 'flex';
+            // 显示题目
+            const qDiv = document.getElementById('aiModalQuestion');
+            if (currentAiQuestionText) {
+                qDiv.innerHTML = '📌 <strong>' + currentAiQuestionText + '</strong>';
+                qDiv.style.display = 'block';
+            } else {
+                qDiv.style.display = 'none';
+            }
             // 显示收藏按钮
             document.getElementById('aiFavBtn').style.display = currentAiQuestionId ? '' : 'none';
         }
@@ -320,13 +334,15 @@
             c.innerHTML = '<div class="loading">加载中...</div>';
             try {
                 const qs = await api('GET', '/api/questions/random/5');
+                const hideInp = localStorage.getItem('hidePracticeInput') === 'true';
                 c.innerHTML = '<h2>随机练习 <button class="btn btn-ai" onclick="refreshPractice()" style="float:right;">🔄 刷新题目</button></h2>';
                 for (const q of qs) {
                     const div = document.createElement('div'); div.className = 'question-card';
                     div.innerHTML = '<div><span class="question-category">' + q.category + (q.subcategory?' - '+q.subcategory:'') + '</span><span class="question-title">' + q.question + '</span></div>' +
-                        '<input class="answer-input" id="a-' + q.id + '" placeholder="输入你的答案">' +
+                        (hideInp ? '' : '<input class="answer-input" id="a-' + q.id + '" placeholder="输入你的答案">' +
                         '<div class="btn-group">' +
-                        '<button class="btn btn-primary" onclick="submitAns(' + q.id + ')">提交答案</button>' +
+                        '<button class="btn btn-primary" onclick="submitAns(' + q.id + ')">提交答案</button>') +
+                        (hideInp ? '<div class="btn-group">' : '') +
                         '<button class="btn btn-ai" onclick="askAI(' + q.id + ',\'' + q.question.replace(/'/g,"\\'") + '\')">🤖 AI</button>' +
                         '<button class="btn btn-fav" id="fb-' + q.id + '" onclick="toggleFav(' + q.id + ',this)">♡ 收藏</button></div>' +
                         '<div class="result" id="r-' + q.id + '"></div>';
@@ -341,13 +357,15 @@
             window._prac = null; document.getElementById('content').innerHTML = '<div class="loading">加载中...</div>';
             const qs = await api('GET', '/api/questions/random/5');
             const c = document.getElementById('content');
+            const hideInp = localStorage.getItem('hidePracticeInput') === 'true';
             c.innerHTML = '<h2>随机练习 <button class="btn btn-ai" onclick="refreshPractice()" style="float:right;">🔄 刷新题目</button></h2>';
             for (const q of qs) {
                 const div = document.createElement('div'); div.className = 'question-card';
                 div.innerHTML = '<div><span class="question-category">' + q.category + (q.subcategory?' - '+q.subcategory:'') + '</span><span class="question-title">' + q.question + '</span></div>' +
-                    '<input class="answer-input" id="a-' + q.id + '" placeholder="输入你的答案">' +
+                    (hideInp ? '' : '<input class="answer-input" id="a-' + q.id + '" placeholder="输入你的答案">' +
                     '<div class="btn-group">' +
-                    '<button class="btn btn-primary" onclick="submitAns(' + q.id + ')">提交答案</button>' +
+                    '<button class="btn btn-primary" onclick="submitAns(' + q.id + ')">提交答案</button>') +
+                    (hideInp ? '<div class="btn-group">' : '') +
                     '<button class="btn btn-ai" onclick="askAI(' + q.id + ',\'' + q.question.replace(/'/g,"\\'") + '\')">🤖 AI</button>' +
                     '<button class="btn btn-fav" id="fb-' + q.id + '" onclick="toggleFav(' + q.id + ',this)">♡ 收藏</button></div>' +
                     '<div class="result" id="r-' + q.id + '"></div>';
@@ -474,8 +492,20 @@
                 '<div id="mList"><div class="loading">加载中...</div></div>';
             try {
                 const qs = await api('GET', '/api/questions?limit=200');
+                const cqs = await api('GET', '/api/custom-questions');
                 const ml = document.getElementById('mList'); ml.innerHTML = '';
-                for (const q of qs.slice(0,50)) {
+                // 自定义题目（按创建时间倒序）显示在最前
+                for (const q of cqs.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 20)) {
+                    const d = document.createElement('div'); d.className = 'question-card';
+                    d.innerHTML = '<div><span class="question-category">✏️ ' + (q.category||'自定义') + '</span><strong>' + q.question + '</strong></div>' +
+                        '<div class="btn-group" style="margin-top:8px;">' +
+                        '<button class="btn btn-primary" onclick="showAns(' + q.id + ',this)">📖 答案</button>' +
+                        '<button class="btn btn-ai" onclick="askAI(' + q.id + ",'" + q.question.replace(/'/g,"\\'") + "')\">🤖 AI</button></div>" +
+                        '<div class="result" style="display:none;"></div>';
+                    ml.appendChild(d);
+                }
+                // 系统题库
+                for (const q of qs.slice(0, 50 - Math.min(cqs.length, 20))) {
                     const d = document.createElement('div'); d.className = 'question-card';
                     d.innerHTML = '<div><span class="question-category">' + q.category + '</span><strong>' + q.question + '</strong></div>' +
                         '<div class="btn-group" style="margin-top:8px;">' +
@@ -546,45 +576,51 @@
             }
         }
 
-        // ---- AI咨询 ----
+        // ---- AI咨询（带历史记录）----
         async function loadAIChat() {
-            document.getElementById('content').innerHTML = '<h2>🤖 AI 咨询</h2>' +
-                '<div class="ai-chat-box"><div class="ai-chat-msgs" id="aiMsgs">' +
-                '<div class="empty-state" style="padding:40px 20px;"><div class="icon">💬</div><p>输入Java问题，AI为你解答</p><p style="font-size:13px;margin-top:8px;color:#a0aec0;">例：ConcurrentHashMap原理、JVM内存模型、Spring循环依赖</p></div>' +
+            const c = document.getElementById('content');
+            let convoId = null, messages = [];
+            try {
+                const list = await api('GET', '/api/ai/chat/list');
+                if (list.length > 0) {
+                    const last = await api('GET', '/api/ai/chat/' + list[0].id);
+                    convoId = last.id;
+                    messages = last.messages || [];
+                }
+            } catch(e) {}
+            const msgsHtml = messages.length
+                ? messages.map(m => '<div class="ai-msg ' + m.role + '"><div class="role">' + (m.role === 'user' ? '你' : 'AI') + '</div>' + renderMd(m.content) + '</div>').join('')
+                : '<div class="empty-state" style="padding:40px 20px;"><div class="icon">💬</div><p>输入Java问题，AI为你解答</p></div>';
+            c.innerHTML = '<h2>🤖 AI 咨询</h2>' +
+                '<div class="ai-chat-box"><div class="ai-chat-msgs" id="aiMsgs">' + msgsHtml +
                 '</div><div class="ai-chat-input"><input id="aiInp" placeholder="输入你的Java问题..." onkeydown="if(event.key===\'Enter\') sendChat()"><button class="btn btn-ai" onclick="sendChat()">发送</button></div></div>';
+            const msgsDiv = document.getElementById('aiMsgs');
+            if (msgsDiv) msgsDiv.scrollTop = msgsDiv.scrollHeight;
+            window._aiConvoId = convoId;
         }
-
         async function sendChat() {
             const inp = document.getElementById('aiInp');
             const msg = inp.value.trim();
             if (!msg) return;
             const msgs = document.getElementById('aiMsgs');
             const ph = msgs.querySelector('.empty-state'); if (ph) ph.remove();
-            const ud = document.createElement('div'); ud.className = 'ai-msg user'; ud.innerHTML = '<div class="role">你</div>' + msg; msgs.appendChild(ud); msgs.scrollTop = msgs.scrollHeight;
+            const ud = document.createElement('div'); ud.className = 'ai-msg user'; ud.innerHTML = '<div class="role">你</div>' + msg; msgs.appendChild(ud);
             inp.value = ''; inp.disabled = true;
             const ad = document.createElement('div'); ad.className = 'ai-msg assistant'; ad.innerHTML = '<div class="role">AI</div><span class="loading">思考中...</span>'; msgs.appendChild(ad);
+            msgs.scrollTop = msgs.scrollHeight;
             try {
-                const r = await fetch('http://localhost:7777/api/ai/ask', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                    body: JSON.stringify({ question: msg })
-                });
-                if (!r.ok) throw new Error('请求失败');
-                const reader = r.body.getReader(), dec = new TextDecoder();
-                let full = '', buf = '';
-                while (true) {
-                    const { done, value } = await reader.read(); if (done) break;
-                    buf += dec.decode(value, { stream: true });
-                    const lines = buf.split('\n'); buf = lines.pop() || '';
-                    for (const ln of lines) {
-                        const s = ln.trim();
-                        if (!s.startsWith('data: ')) continue;
-                        const d = s.slice(6).trim();
-                        if (d === '[DONE]') continue;
-                        try { const p = JSON.parse(d); if (p.content) { full += p.content; ad.innerHTML = '<div class="role">AI</div>' + renderMd(full); msgs.scrollTop = msgs.scrollHeight; } else if (p.error) ad.innerHTML = '<div class="role">AI</div>⚠️ ' + p.error; } catch(e) {}
-                    }
+                let convoId = window._aiConvoId;
+                if (!convoId) {
+                    const newC = await api('POST', '/api/ai/chat/new', { title: msg.substring(0, 30) });
+                    convoId = newC.id;
+                    window._aiConvoId = convoId;
                 }
-                if (!full) ad.innerHTML = '<div class="role">AI</div>⚠️ 未收到有效回复';
-            } catch(e) { ad.innerHTML = '<div class="role">AI</div>⚠️ 请求失败：' + e.message; } finally { inp.disabled = false; inp.focus(); }
+                const chatRes = await api('POST', '/api/ai/chat/' + convoId + '/message', { message: msg });
+                const full = chatRes.reply || '';
+                ad.innerHTML = full ? '<div class="role">AI</div>' + renderMd(full) : '<div class="role">AI</div>⚠️ 无回复';
+                msgs.scrollTop = msgs.scrollHeight;
+            } catch(e) { ad.innerHTML = '<div class="role">AI</div>⚠️ ' + e.message; }
+            finally { inp.disabled = false; inp.focus(); }
         }
 
         // ---- 设置 ----
@@ -599,6 +635,11 @@
                     '<div class="cfg-item"><label>API密钥</label><input id="cfgKey" value="' + (localStorage.getItem('ai_key')||'') + '" placeholder="sk-..."></div>' +
                     '<div class="cfg-item"><label>后端端口</label><input id="cfgPort" value="7777" placeholder="7777"></div>' +
                     '</div>' +
+                    '<div class="cfg-grid" style="margin-top:15px;">' +
+                    '<div class="cfg-item" style="grid-column:span 2;"><label style="display:flex;align-items:center;gap:10px;cursor:pointer;">' +
+                    '<input type="checkbox" id="hidePracticeInput"' + (localStorage.getItem('hidePracticeInput') === 'true' ? ' checked' : '') + ' onchange="localStorage.setItem(\'hidePracticeInput\', this.checked);toast(\'练习模式已' + (localStorage.getItem('hidePracticeInput') === 'true' ? '关闭' : '开启') + '输入框\', \'⚙️\')"> ' +
+                    '随机练习页隐藏答案输入框和提交按钮（仅显示题目）</label></div>' +
+                    '</div>' +
                     '<div class="btn-group" style="margin-top:15px;">' +
                     '<button class="btn btn-primary" onclick="saveSettings()">💾 保存配置</button>' +
                     '<button class="btn btn-danger" onclick="restartService()">🔄 重启服务</button></div>' +
@@ -608,8 +649,20 @@
 
         async function saveSettings() {
             const key = document.getElementById('cfgKey').value;
-            localStorage.setItem('ai_key', key);
-            toast('配置已保存（重启后生效）', '✅');
+            const url = document.getElementById('cfgUrl').value;
+            const model = document.getElementById('cfgModel').value;
+            const port = document.getElementById('cfgPort').value;
+            try {
+                const res = await api('POST', '/api/config/update', {
+                    ai_api_key: key || undefined,
+                    ai_api_base_url: url || undefined,
+                    ai_model: model || undefined,
+                    port: port || undefined
+                });
+                toast('配置已保存到 .env 文件，点「重启服务」生效', '✅');
+            } catch(e) {
+                toast('保存失败：' + e.message, '❌');
+            }
         }
 
         async function restartService() {

@@ -6,6 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const db_1 = __importDefault(require("./db"));
 const auth_1 = __importDefault(require("./routes/auth"));
 const questions_1 = __importDefault(require("./routes/questions"));
@@ -30,6 +32,31 @@ app.get('/health', (req, res) => {
 app.post('/restart', (req, res) => {
     res.json({ message: '服务即将重启' });
     setTimeout(() => { process.exit(0); }, 500);
+});
+// 更新 .env 配置
+app.post('/api/config/update', (req, res) => {
+    try {
+        const { ai_api_key, ai_api_base_url, ai_model, port } = req.body;
+        const envPath = path_1.default.join(__dirname, '../.env');
+        let envContent = fs_1.default.readFileSync(envPath, 'utf-8');
+        if (ai_api_key) {
+            envContent = envContent.replace(/^AI_API_KEY=.*/m, 'AI_API_KEY=' + ai_api_key);
+        }
+        if (ai_api_base_url) {
+            envContent = envContent.replace(/^AI_API_BASE_URL=.*/m, 'AI_API_BASE_URL=' + ai_api_base_url);
+        }
+        if (ai_model) {
+            envContent = envContent.replace(/^AI_MODEL=.*/m, 'AI_MODEL=' + ai_model);
+        }
+        if (port) {
+            envContent = envContent.replace(/^PORT=.*/m, 'PORT=' + port);
+        }
+        fs_1.default.writeFileSync(envPath, envContent, 'utf-8');
+        res.json({ message: '配置已更新，重启服务后生效', path: envPath });
+    }
+    catch (error) {
+        res.status(500).json({ error: '配置更新失败: ' + error.message });
+    }
 });
 app.listen(PORT, async () => {
     await db_1.default.initDb();
