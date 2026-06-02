@@ -493,7 +493,15 @@
             try {
                 const q = await api('GET', '/api/questions/' + qid);
                 rd.className = 'result correct'; rd.innerHTML = '答案：' + q.answer; rd.style.display = 'block'; btn.disabled = true;
-            } catch(e) { toast('获取答案失败：' + e.message, '❌'); }
+            } catch(e) {
+                // 如果系统题库没找到，尝试自定义题库
+                try {
+                    const q = await api('GET', '/api/custom-questions/' + qid);
+                    rd.className = 'result correct'; rd.innerHTML = '答案：' + q.answer; rd.style.display = 'block'; btn.disabled = true;
+                } catch(e2) {
+                    toast('获取答案失败：' + e2.message, '❌');
+                }
+            }
         }
 
         // ---- 收藏 ----
