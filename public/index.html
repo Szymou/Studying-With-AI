@@ -39,8 +39,8 @@
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
         .stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; text-align: center; }
         .stat-value { font-size: 32px; font-weight: bold; }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
-        .modal-content { background: white; padding: 30px; border-radius: 10px; max-width: 800px; width: 90%; max-height: 80vh; display: flex; flex-direction: column; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+        .modal-content { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; width: 75%; max-width: 1200px; max-height: 85vh; display: flex; flex-direction: column; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
         .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 5px; }
@@ -103,8 +103,8 @@
 
     <!-- AI 助手弹窗 -->
     <div class="modal" id="aiModal">
-        <div class="modal-content">
-            <h2 id="aiModalTitle">🤖 AI 助手</h2>
+        <div class="modal-content" id="aiModalContentBox">
+            <h2 id="aiModalTitle" style="cursor:move;user-select:none;" onmousedown="dragModalStart(event)">🤖 AI 助手</h2>
             <div id="aiModalQuestion" style="background:#f7fafc;padding:10px 14px;border-radius:8px;margin-bottom:10px;font-size:14px;color:#2d3748;display:none;"></div>
             <div id="aiModalContent" style="line-height: 1.6;">AI思考中...</div>
             <div class="modal-footer">
@@ -124,6 +124,7 @@
         let currentAiQuestionId = null;
         let currentAiQuestionText = null;
         let aiAnswers = [];      // 多答案缓存 [{text, ts}]
+        let currentAbortController = null;
 
         function toast(msg, icon) {
             const c = document.getElementById('toastContainer');
@@ -221,7 +222,34 @@
             // 显示收藏按钮
             document.getElementById('aiFavBtn').style.display = currentAiQuestionId ? '' : 'none';
         }
+        function dragModalStart(e) {
+            if (e.target.tagName !== 'H2') return;
+            const box = document.getElementById('aiModalContentBox');
+            const rect = box.getBoundingClientRect();
+            window._dragData = { offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top, box };
+            document.addEventListener('mousemove', dragModalMove);
+            document.addEventListener('mouseup', dragModalEnd);
+            e.preventDefault();
+        }
+        function dragModalMove(e) {
+            if (!window._dragData) return;
+            const { offsetX, offsetY, box } = window._dragData;
+            let x = e.clientX - offsetX;
+            let y = e.clientY - offsetY;
+            x = Math.max(0, Math.min(window.innerWidth - box.offsetWidth, x));
+            y = Math.max(0, Math.min(window.innerHeight - box.offsetHeight, y));
+            box.style.left = x + 'px';
+            box.style.top = y + 'px';
+            box.style.transform = 'none';
+        }
+        function dragModalEnd() {
+            window._dragData = null;
+            document.removeEventListener('mousemove', dragModalMove);
+            document.removeEventListener('mouseup', dragModalEnd);
+        }
+
         function closeAiModal() {
+            if (currentAbortController) { currentAbortController.abort(); currentAbortController = null; }
             document.getElementById('aiModal').style.display = 'none';
             currentAiQuestionId = null;
             currentAiQuestionText = null;
@@ -244,10 +272,14 @@
             }
 
             openAiModal('🤖 AI思考中...', false);
+            if (currentAbortController) currentAbortController.abort();
+            currentAbortController = new AbortController();
+            const signal = currentAbortController.signal;
             try {
                 const r = await fetch('http://localhost:7777/api/ai/ask', {
                     method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                    body: JSON.stringify({ question: qText, userAnswer: ua || '' })
+                    body: JSON.stringify({ question: qText, userAnswer: ua || '' }),
+                    signal
                 });
                 if (!r.ok) throw new Error('请求失败 (' + r.status + ')');
                 const reader = r.body.getReader();
@@ -284,6 +316,7 @@
                     return full;
                 } else throw new Error('未收到有效内容');
             } catch(e) {
+                if (e.name === 'AbortError') { return null; }
                 openAiModal('⚠️ AI暂时不可用：' + e.message, false);
                 return null;
             }
@@ -687,7 +720,7 @@
         } else {
             document.getElementById('content').innerHTML =
                 '<div class="modal" id="loginModal" style="display:flex;background:none;position:static;">' +
-                '<div class="modal-content"><h2>登录 / 注册</h2>' +
+                '<div class="modal-content" id="aiModalContentBox"><h2>登录 / 注册</h2>' +
                 '<div class="form-group"><label>用户名</label><input type="text" id="loginUsername" placeholder="请输入用户名" autocomplete="off"></div>' +
                 '<div class="form-group"><label>密码</label><input type="password" id="loginPassword" placeholder="请输入密码" autocomplete="off"></div>' +
                 '<div class="btn-group"><button class="btn btn-primary" onclick="doLogin()">登录</button><button class="btn btn-success" onclick="doRegister()">注册</button></div></div></div>';
