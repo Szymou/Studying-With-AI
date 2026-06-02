@@ -191,6 +191,87 @@ router.post('/chat/:id/message', async (req, res) => {
   } catch (error: any) { res.status(500).json({ error: error.message || 'AI咨询失败' }); }
 });
 
+  // Streaming chat endpoint - SSE
+  router.post('/chat/:id/message/stream', async (req: any, res: any) => {
+    try {
+      const { message } = req.body;
+      if (!message) return res.status(400).json({ error: '消息不能为空' });
+
+      const convo = await db.get('SELECT id, messages FROM ai_conversations WHERE id = ? AND user_id = ?', [req.params.id, req.user.userId]);
+      if (!convo) return res.status(404).json({ error: '对话不存在' });
+
+      const messages = JSON.parse(convo.messages || '[]');
+      messages.push({ role: 'user', content: message });
+
+      // Set SSE headers
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+
+      if (!AI_API_KEY) {
+        res.write('data: ' + JSON.stringify({ error: 'AI服务未配置' }) + '\n\n');
+        res.write('data: [DONE]\n\n');
+        return res.end();
+      }
+
+      const fullMessages = [{ role: 'system', content: '你是一个专家级的Java专家，知识广阔，教知识会举例子。' }, ...messages];
+
+      let buffer = '';
+      let fullReply = '';
+      const response = await axios.post(
+        AI_BASE_URL + '/chat/completions',
+        { model: AI_MODEL, messages: fullMessages, temperature: 0.7, stream: true },
+        { headers: { 'Authorization': 'Bearer ' + AI_API_KEY, 'Content-Type': 'application/json' }, responseType: 'stream', timeout: 30000 }
+      );
+
+      response.data.on('data', (chunk: Buffer) => {
+        buffer += chunk.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data: ')) continue;
+          const dataStr = trimmed.slice(6).trim();
+          if (dataStr === '[DONE]') { return; }
+          try {
+            const parsed = JSON.parse(dataStr);
+            const content = parsed.choices?.[0]?.delta?.content || parsed.choices?.[0]?.text || '';
+            if (content) {
+              fullReply += content;
+              res.write('data: ' + JSON.stringify({ content }) + '\n\n');
+            }
+          } catch (e) {}
+        }
+      });
+
+      response.data.on('end', async () => {
+        if (fullReply) {
+          messages.push({ role: 'assistant', content: fullReply });
+          const firstUserMsg = messages.find((m: any) => m.role === 'user');
+          const title = convo.title || (firstUserMsg ? firstUserMsg.content.substring(0, 30) : 'Java咨询');
+          await db.run('UPDATE ai_conversations SET messages = ?, title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [JSON.stringify(messages), title, req.params.id]);
+        }
+        res.write('data: [DONE]\n\n');
+        res.end();
+      });
+
+      response.data.on('error', (err: any) => {
+        console.error('Stream error:', err);
+        res.write('data: ' + JSON.stringify({ error: '流式传输中断' }) + '\n\n');
+        res.write('data: [DONE]\n\n');
+        res.end();
+      });
+    } catch (error: any) {
+      console.error('Chat stream error:', error);
+      res.write('data: ' + JSON.stringify({ error: error.message || 'AI咨询失败' }) + '\n\n');
+      res.write('data: [DONE]\n\n');
+      res.end();
+    }
+  });
+
+
+
 router.delete('/chat/:id', async (req, res) => {
   try {
     await db.run('DELETE FROM ai_conversations WHERE id = ? AND user_id = ?', [req.params.id, req.user.userId]);
