@@ -74,6 +74,9 @@
         .cat-checkboxes { display: flex; flex-wrap: wrap; gap: 10px; }
         .cat-checkboxes label { display: flex; align-items: center; gap: 5px; padding: 6px 12px; background: #f7fafc; border-radius: 5px; cursor: pointer; border: 1px solid #e2e8f0; }
         .cat-checkboxes label.active { background: #667eea; color: white; border-color: #667eea; }
+        .ans-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+        .ans-tab { padding: 4px 14px; border-radius: 20px; font-size: 13px; border: 1px solid #e2e8f0; background: #f7fafc; cursor: pointer; }
+        .ans-tab.active { background: #667eea; color: white; border-color: #667eea; }
     </style>
 </head>
 <body>
@@ -103,6 +106,7 @@
             <h2 id="aiModalTitle">🤖 AI 助手</h2>
             <div id="aiModalContent" style="line-height: 1.6;">AI思考中...</div>
             <div class="modal-footer">
+                <button class="btn btn-fav" id="aiFavBtn" onclick="favCurrentQuestion()" style="display:none;">♡ 收藏本题</button>
                 <button class="btn" id="aiRefreshBtn" onclick="refreshAIAnswer()">🔄 刷新答案</button>
                 <button class="btn btn-primary" onclick="closeAiModal()">关闭</button>
             </div>
@@ -117,6 +121,7 @@
         let currentUser = null;
         let currentAiQuestionId = null;
         let currentAiQuestionText = null;
+        let aiAnswers = [];      // 多答案缓存 [{text, ts}]
 
         function toast(msg, icon) {
             const c = document.getElementById('toastContainer');
@@ -181,16 +186,49 @@
 
         function renderMd(c) { return typeof marked !== 'undefined' ? marked.parse(c) : c.replace(/\n/g, '<br>'); }
 
-        // ---- AI单题助手 ----
+        // ---- AI单题助手（多答案Tab）----
+        function renderAiModal() {
+            const tabsHtml = aiAnswers.map((a, i) =>
+                `<span class="ans-tab${i === aiAnswers.length - 1 ? ' active' : ''}" onclick="switchAiTab(${i})">答案${i + 1}</span>`
+            ).join('');
+            const content = aiAnswers.length ? renderMd(aiAnswers[aiAnswers.length - 1].text) : '';
+            document.getElementById('aiModalContent').innerHTML = '<div class="ans-tabs">' + tabsHtml + '</div><div>' + content + '</div>';
+        }
+
+        function switchAiTab(idx) {
+            document.querySelectorAll('#aiModalContent .ans-tab').forEach((t, i) => t.classList.toggle('active', i === idx));
+            const div = document.querySelector('#aiModalContent > div:last-child');
+            if (div && aiAnswers[idx]) div.innerHTML = renderMd(aiAnswers[idx].text);
+        }
+
         function openAiModal(c, isMd) {
             document.getElementById('aiModalContent').innerHTML = isMd ? renderMd(c) : c;
             document.getElementById('aiModal').style.display = 'flex';
+            // 显示收藏按钮
+            document.getElementById('aiFavBtn').style.display = currentAiQuestionId ? '' : 'none';
         }
-        function closeAiModal() { document.getElementById('aiModal').style.display = 'none'; currentAiQuestionId = null; }
+        function closeAiModal() {
+            document.getElementById('aiModal').style.display = 'none';
+            currentAiQuestionId = null;
+            currentAiQuestionText = null;
+            aiAnswers = [];
+        }
 
         async function fetchAIAnswer(qid, qText, ua, force) {
+            currentAiQuestionId = qid;
+            currentAiQuestionText = qText;
             const ck = 'ai_' + qid;
-            if (!force) { const c = localStorage.getItem(ck); if (c) { openAiModal('📝 **上次AI回答**（已缓存）：\n\n' + c); return c; } }
+
+            // 强制刷新时不清缓存，追加答案
+            if (!force) {
+                const cached = localStorage.getItem(ck);
+                if (cached) {
+                    aiAnswers = [{ text: cached, ts: Date.now() }];
+                    renderAiModal();
+                    return cached;
+                }
+            }
+
             openAiModal('🤖 AI思考中...', false);
             try {
                 const r = await fetch('http://localhost:7777/api/ai/ask', {
@@ -225,8 +263,9 @@
                     }
                 }
                 if (full) {
+                    aiAnswers.push({ text: full, ts: Date.now() });
                     localStorage.setItem(ck, full);
-                    openAiModal('📝 **AI回答**：\n\n' + full);
+                    renderAiModal();
                     return full;
                 } else throw new Error('未收到有效内容');
             } catch(e) {
@@ -236,7 +275,7 @@
         }
 
         async function askAI(qid, qt) {
-            currentAiQuestionId = qid; currentAiQuestionText = qt;
+            aiAnswers = [];
             const inp = document.getElementById('a-' + qid);
             await fetchAIAnswer(qid, qt, inp ? inp.value : '', false);
         }
@@ -244,6 +283,19 @@
             if (!currentAiQuestionId || !currentAiQuestionText) { toast('请重新点击AI助手按钮', '⚠️'); return; }
             const inp = document.getElementById('a-' + currentAiQuestionId);
             await fetchAIAnswer(currentAiQuestionId, currentAiQuestionText, inp ? inp.value : '', true);
+        }
+        async function favCurrentQuestion() {
+            if (!currentAiQuestionId) { toast('没有当前题目', '⚠️'); return; }
+            const btn = document.getElementById('aiFavBtn');
+            if (btn.classList.contains('active')) {
+                await api('DELETE', '/api/favorites/' + currentAiQuestionId);
+                btn.classList.remove('active'); btn.textContent = '♡ 收藏本题';
+                toast('已取消收藏', '💔');
+            } else {
+                await api('POST', '/api/favorites/' + currentAiQuestionId, { sourceType: 'system' });
+                btn.classList.add('active'); btn.textContent = '❤️ 已收藏';
+                toast('收藏成功！', '❤️');
+            }
         }
 
         // ---- 收藏 ----

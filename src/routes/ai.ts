@@ -127,7 +127,7 @@ async function sendLocalAnswer(question: string, userAnswer: string | undefined,
       return;
     }
     // 没匹配到，返回友好提示
-    res.write('data: ' + JSON.stringify({ content: '⚠️ AI服务暂时不可用（DeepSeek账号池无可用账号）。\n\n建议：\n1. 使用「显示答案」按钮查看标准答案\n2. 在题目搜索页面搜索相关知识点\n3. 修复 ds-free-api 的账号配置后重启服务' }) + '\n\n');
+    res.write('data: ' + JSON.stringify({ content: '⚠️ AI服务暂时不可用，未能获取到AI回答。\\n\\n建议：\\n1. 使用「显示答案」按钮查看标准答案\\n2. 在题目搜索页面搜索相关知识点\\n3. 检查 .env 中的 AI_API_KEY、AI_API_BASE_URL、AI_MODEL 配置是否正确' }) + '\n\n');
   } catch (e) {
     res.write('data: ' + JSON.stringify({ content: '⚠️ AI服务暂时不可用，请稍后再试。' }) + '\n\n');
   }
