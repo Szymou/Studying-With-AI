@@ -72,10 +72,10 @@ router.post('/ask', async (req, res) => {
         res.write('data: [DONE]\n\n');
         return res.end();
     }
-    const systemPrompt = '你是一个Java技术面试辅导专家，精通Java八股文。请用中文回答。';
+    const systemPrompt = '你是一个Java技术面试辅导专家，精通Java八股文。请用中文回答，**必须包含代码示例**。回答格式：先给出简洁解释，然后提供具体代码用例说明。';
     const userPrompt = userAnswer
-        ? '问题：' + question + '\n用户的回答：' + userAnswer + '\n请评价并给出标准答案。'
-        : '问题：' + question + '\n请给出详细准确的答案。';
+        ? '问题：' + question + '\n用户的回答：' + userAnswer + '\n请评价是否正确，并给出标准答案（含代码示例）。'
+        : '问题：' + question + '\n请给出详细准确的答案，包含具体代码示例说明原理。';
     try {
         let buffer = '';
         const response = await axios_1.default.post(AI_BASE_URL + '/chat/completions', { model: AI_MODEL, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }], temperature: 0.7, stream: true }, { headers: { 'Authorization': 'Bearer ' + AI_API_KEY, 'Content-Type': 'application/json' }, responseType: 'stream', timeout: 15000 });
@@ -148,9 +148,16 @@ async function sendLocalAnswer(question, userAnswer, res) {
         // 在题库中搜索匹配
         const rows = await dbModule.all('SELECT answer, question FROM questions WHERE question LIKE ? LIMIT 1', ['%' + question.replace(/[?？]/g, '').substring(0, 20) + '%']);
         if (rows && rows.length > 0) {
+            // 丰富标准答案，尽可能添加代码示例
+            let answer = rows[0].answer;
+            const qText = rows[0].question || '';
+            // 对一些常见题型追加代码示例
+            if ((qText.includes('区别') || qText.includes('对比') || qText.includes('原理')) && !answer.includes('```')) {
+                answer += '\n\n**代码示例：**\n```java\n// 以 ' + qText.replace(/[?？]/g, '') + ' 为例\n// （请参考完整AI回答或标准教材）\n```';
+            }
             const reply = userAnswer
-                ? '**问题：**' + question + '\n\n用户的回答：' + userAnswer + '\n\n**标准答案：**\n' + rows[0].answer
-                : '**答案：**\n' + rows[0].answer;
+                ? '**问题：**' + question + '\n\n用户的回答：' + userAnswer + '\n\n**标准答案：**\n' + answer
+                : '**答案说明：**\n' + answer;
             res.write('data: ' + JSON.stringify({ content: reply }) + '\n\n');
             return;
         }

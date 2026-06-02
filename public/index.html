@@ -219,7 +219,7 @@
             currentAiQuestionText = qText;
             const ck = 'ai_' + qid;
 
-            // 强制刷新时不清缓存，追加答案
+            // 先查本地缓存（除非强制刷新）
             if (!force) {
                 const cached = localStorage.getItem(ck);
                 if (cached) {
@@ -263,8 +263,9 @@
                     }
                 }
                 if (full) {
-                    aiAnswers.push({ text: full, ts: Date.now() });
+                    // 存储到本地
                     localStorage.setItem(ck, full);
+                    aiAnswers.push({ text: full, ts: Date.now() });
                     renderAiModal();
                     return full;
                 } else throw new Error('未收到有效内容');
@@ -274,15 +275,17 @@
             }
         }
 
+        // 全局统一的AI按钮逻辑：查缓存 → 调接口 → 存本地
         async function askAI(qid, qt) {
             aiAnswers = [];
+            // 避免从练习页面错误地获取输入框
             const inp = document.getElementById('a-' + qid);
-            await fetchAIAnswer(qid, qt, inp ? inp.value : '', false);
+            const ua = inp ? inp.value : '';
+            await fetchAIAnswer(qid, qt, ua, false);
         }
         async function refreshAIAnswer() {
             if (!currentAiQuestionId || !currentAiQuestionText) { toast('请重新点击AI助手按钮', '⚠️'); return; }
-            const inp = document.getElementById('a-' + currentAiQuestionId);
-            await fetchAIAnswer(currentAiQuestionId, currentAiQuestionText, inp ? inp.value : '', true);
+            await fetchAIAnswer(currentAiQuestionId, currentAiQuestionText, '', true);
         }
         async function favCurrentQuestion() {
             if (!currentAiQuestionId) { toast('没有当前题目', '⚠️'); return; }
