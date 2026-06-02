@@ -47,14 +47,13 @@ function keywordMatch(userAnswer, correctAnswer) {
   return ratio >= 0.7;
 }
 
-// AI 咨询接口 - 遵循 OpenAI Chat 协议
+// AI 咨询接口 - 支持流式输出
 app.post('/api/ai/ask', async (req, res) => {
-  const { question, userAnswer } = req.body;
+  const { question, userAnswer, stream = false } = req.body;
   if (!question) {
     return res.status(400).json({ error: '问题不能为空' });
   }
   try {
-    // 构造提示词，要求返回具体用例
     let prompt = `你是Java八股文专家，请针对以下问题给出详细、准确的参考答案。要求：
 1. 先给出核心答案（一句话概括）
 2. 然后展开详细解释，必须包含具体的代码示例或实际应用场景用例（如适用）
@@ -65,40 +64,97 @@ app.post('/api/ai/ask', async (req, res) => {
     } else {
       prompt += `\n\n请按上述要求给出标准答案（包含具体用例）。`;
     }
-    // 严格按照 OpenAI Chat Completion API 格式
-    const response = await axios.post(AI_CONFIG.url, {
-      model: AI_CONFIG.model,
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 1000,
-      temperature: 0.7
-    }, {
-      headers: {
-        'Authorization': `Bearer ${AI_CONFIG.apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      timeout: 30000
-    });
-    // 响应格式符合 OpenAI 标准
-    const aiAnswer = response.data.choices[0]?.message?.content;
-    if (!aiAnswer) {
-      throw new Error('AI返回内容为空');
+
+    if (stream) {
+      // 流式响应
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders();
+
+      const response = await axios.post(AI_CONFIG.url, {
+        model: AI_CONFIG.model,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 1000,
+        temperature: 0.7,
+        stream: true
+      }, {
+        headers: {
+          'Authorization': `Bearer ${AI_CONFIG.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 60000,
+        responseType: 'stream'
+      });
+
+      response.data.on('data', (chunk) => {
+        const lines = chunk.toString().split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              res.write('event: done\ndata: [DONE]\n\n');
+              res.end();
+              return;
+            }
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices[0]?.delta?.content;
+              if (content) {
+                res.write(`data: ${JSON.stringify({ content })}\n\n`);
+              }
+            } catch (e) {
+              // 忽略解析错误
+            }
+          }
+        }
+      });
+
+      response.data.on('end', () => {
+        res.write('event: done\ndata: [DONE]\n\n');
+        res.end();
+      });
+
+      response.data.on('error', (err) => {
+        console.error('流式响应错误:', err);
+        res.write(`data: ${JSON.stringify({ error: '流式传输中断' })}\n\n`);
+        res.end();
+      });
+    } else {
+      // 非流式响应（兼容旧逻辑）
+      const response = await axios.post(AI_CONFIG.url, {
+        model: AI_CONFIG.model,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 1000,
+        temperature: 0.7
+      }, {
+        headers: {
+          'Authorization': `Bearer ${AI_CONFIG.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      });
+      const aiAnswer = response.data.choices[0]?.message?.content;
+      if (!aiAnswer) throw new Error('AI返回内容为空');
+      res.json({ answer: aiAnswer });
     }
-    res.json({ answer: aiAnswer });
   } catch (error) {
     console.error('AI调用失败:', error.message);
-    // 提供更详细的错误信息，便于调试
     let errorMsg = 'AI服务暂时不可用';
     if (error.response) {
       console.error('AI响应错误:', JSON.stringify(error.response.data, null, 2));
       errorMsg = `AI服务错误: ${error.response.status}`;
     } else if (error.request) {
-      console.error('AI请求无响应，请检查服务地址和端口');
       errorMsg = '无法连接到AI服务，请确认服务地址和端口';
     } else {
-      console.error('AI请求配置错误:', error.message);
       errorMsg = `AI请求失败: ${error.message}`;
     }
-    res.status(500).json({ error: errorMsg });
+    if (stream) {
+      res.write(`data: ${JSON.stringify({ error: errorMsg })}\n\n`);
+      res.end();
+    } else {
+      res.status(500).json({ error: errorMsg });
+    }
   }
 });
 
