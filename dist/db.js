@@ -1,4 +1,119 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.initDb = exports.all = exports.get = exports.run = void 0;
+const sqlite3 = require('sqlite3');
+const path_1 = __importDefault(require("path"));
+const dbPath = path_1.default.join(__dirname, '../data/questions.db');
+const db = new sqlite3.Database(dbPath);
+const run = (sql, params) => {
+    return new Promise((resolve, reject) => {
+        db.run(sql, params, function (err) {
+            if (err)
+                reject(err);
+            else
+                resolve({ lastID: this.lastID, changes: this.changes });
+        });
+    });
+};
+exports.run = run;
+const get = (sql, params) => {
+    return new Promise((resolve, reject) => {
+        db.get(sql, params, (err, row) => {
+            if (err)
+                reject(err);
+            else
+                resolve(row);
+        });
+    });
+};
+exports.get = get;
+const all = (sql, params) => {
+    return new Promise((resolve, reject) => {
+        db.all(sql, params, (err, rows) => {
+            if (err)
+                reject(err);
+            else
+                resolve(rows);
+        });
+    });
+};
+exports.all = all;
+const initDb = async () => {
+    await (0, exports.run)(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+    await (0, exports.run)(`
+    CREATE TABLE IF NOT EXISTS questions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      category TEXT NOT NULL,
+      subcategory TEXT,
+      question TEXT NOT NULL,
+      answer TEXT NOT NULL,
+      difficulty TEXT CHECK(difficulty IN ('easy', 'medium', 'hard')),
+      tags TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+    await (0, exports.run)(`
+    CREATE TABLE IF NOT EXISTS custom_questions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      category TEXT DEFAULT '自定义',
+      subcategory TEXT,
+      question TEXT NOT NULL,
+      answer TEXT NOT NULL,
+      tags TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    )
+  `);
+    await (0, exports.run)(`
+    CREATE TABLE IF NOT EXISTS favorites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      question_id INTEGER,
+      source_type TEXT CHECK(source_type IN ('system', 'custom')) NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    )
+  `);
+    await (0, exports.run)(`
+    CREATE TABLE IF NOT EXISTS ai_conversations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      title TEXT,
+      messages TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    )
+  `);
+    await (0, exports.run)(`
+    CREATE TABLE IF NOT EXISTS user_progress (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      question_id INTEGER NOT NULL,
+      is_correct BOOLEAN NOT NULL,
+      answered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id),
+      FOREIGN KEY(question_id) REFERENCES questions(id)
+    )
+  `);
+    const count = await (0, exports.get)('SELECT COUNT(*) as count FROM questions');
+    if (!count.count) {
+        await seedSampleQuestions();
+    }
+};
+exports.initDb = initDb;
 const seedSampleQuestions = async () => {
     const questions = [
         // ==================== Java基础 (15题) ====================
@@ -97,7 +212,7 @@ const seedSampleQuestions = async () => {
         ['数据库', 'MySQL', '聚簇索引和非聚簇索引的区别？', '聚簇索引的叶子节点存储数据行（InnoDB主键），非聚簇索引存储主键值（回表）。'],
         ['数据库', '事务', '事务的隔离级别？', '读未提交、读已提交、可重复读（MySQL默认）、串行化。解决脏读、不可重复读、幻读。'],
         ['数据库', 'MySQL', 'MySQL的存储引擎？', 'InnoDB（事务、行锁、外键）、MyISAM（表锁、全文索引，不支持事务）、Memory（内存）。'],
-        ['数据库', 'SQL', '什么是索引失效？', '函数操作（WHERE LEFT(name,3)）、隐式类型转换、OR条件、LIKE ' % xx, '、NOT IN等。'],
+        ['数据库', 'SQL', '什么是索引失效？', '函数操作（WHERE LEFT(name,3)）、隐式类型转换、OR条件、LIKE %%xx、NOT IN等。'],
         ['数据库', '事务', '什么是MVCC？', '多版本并发控制，通过Undo Log保存快照。实现读已提交和可重复读。'],
         ['数据库', '优化', '如何优化慢查询？', 'explain分析、加索引、避免回表（覆盖索引）、分页优化（延迟关联）。'],
         ['数据库', 'MySQL', '主从复制的原理？', '主库binlog转存到从库中继日志，SQL线程重放。异步、半同步、全同步。'],
@@ -125,9 +240,10 @@ const seedSampleQuestions = async () => {
         ['消息队列', '消息', '如何保证消息不丢失？', '生产者ACK确认、Broker持久化（刷盘/副本）、消费者手动提交offset。']
     ];
     for (const q of questions) {
-        await run(`
+        await (0, exports.run)(`
       INSERT INTO questions (category, subcategory, question, answer, difficulty)
       VALUES (?, ?, ?, ?, ?)
     `, [q[0], q[1], q[2], q[3], 'medium']);
     }
 };
+exports.default = { run: exports.run, get: exports.get, all: exports.all, initDb: exports.initDb };

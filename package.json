@@ -1,7 +1,7 @@
 {
   "name": "java-eight-part-system",
   "version": "1.0.0",
-  "description": "Java \u516b\u80a1\u6587\u5b66\u4e60\u7cfb\u7edf (\u540e\u7aefAPI + CLI\u5de5\u5177)",
+  "description": "Java 八股文学习系统 (后端API + CLI工具)",
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
@@ -10,23 +10,25 @@
     "cli": "node dist/cli.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "sqlite3": "^5.1.6",
-    "jsonwebtoken": "^9.0.2",
-    "bcrypt": "^5.1.1",
-    "dotenv": "^16.3.1",
     "axios": "^1.6.2",
+    "bcrypt": "^5.1.1",
     "commander": "^11.1.0",
-    "inquirer": "^9.2.12"
+    "cors": "^2.8.6",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "inquirer": "^9.2.12",
+    "jsonwebtoken": "^9.0.2",
+    "sqlite3": "^5.1.6"
   },
   "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/cors": "^2.8.19",
     "@types/express": "^4.17.21",
+    "@types/inquirer": "^9.0.7",
+    "@types/jsonwebtoken": "^9.0.5",
     "@types/node": "^20.10.5",
     "@types/sqlite3": "^3.1.9",
-    "@types/jsonwebtoken": "^9.0.5",
-    "@types/bcrypt": "^5.0.2",
-    "@types/inquirer": "^9.0.7",
-    "typescript": "^5.3.3",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
   }
 }

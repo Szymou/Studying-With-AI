@@ -1,3 +1,115 @@
+const sqlite3 = require('sqlite3');
+import path from 'path';
+
+const dbPath = path.join(__dirname, '../data/questions.db');
+const db: any = new sqlite3.Database(dbPath);
+
+export const run = (sql: string, params?: any[]): Promise<{ lastID: number; changes: number }> => {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function (this: any, err: Error | null) {
+      if (err) reject(err);
+      else resolve({ lastID: this.lastID, changes: this.changes });
+    });
+  });
+};
+
+export const get = (sql: string, params?: any[]): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    db.get(sql, params, (err: Error | null, row: any) => {
+      if (err) reject(err);
+      else resolve(row);
+    });
+  });
+};
+
+export const all = (sql: string, params?: any[]): Promise<any[]> => {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err: Error | null, rows: any[]) => {
+      if (err) reject(err);
+      else resolve(rows);
+    });
+  });
+};
+
+export const initDb = async () => {
+  await run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS questions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      category TEXT NOT NULL,
+      subcategory TEXT,
+      question TEXT NOT NULL,
+      answer TEXT NOT NULL,
+      difficulty TEXT CHECK(difficulty IN ('easy', 'medium', 'hard')),
+      tags TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS custom_questions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      category TEXT DEFAULT '自定义',
+      subcategory TEXT,
+      question TEXT NOT NULL,
+      answer TEXT NOT NULL,
+      tags TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS favorites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      question_id INTEGER,
+      source_type TEXT CHECK(source_type IN ('system', 'custom')) NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS ai_conversations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      title TEXT,
+      messages TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS user_progress (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      question_id INTEGER NOT NULL,
+      is_correct BOOLEAN NOT NULL,
+      answered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id),
+      FOREIGN KEY(question_id) REFERENCES questions(id)
+    )
+  `);
+
+  const count = await get('SELECT COUNT(*) as count FROM questions');
+  if (!count.count) {
+    await seedSampleQuestions();
+  }
+};
+
 const seedSampleQuestions = async () => {
   const questions = [
     // ==================== Java基础 (15题) ====================
@@ -103,7 +215,7 @@ const seedSampleQuestions = async () => {
     ['数据库', 'MySQL', '聚簇索引和非聚簇索引的区别？', '聚簇索引的叶子节点存储数据行（InnoDB主键），非聚簇索引存储主键值（回表）。'],
     ['数据库', '事务', '事务的隔离级别？', '读未提交、读已提交、可重复读（MySQL默认）、串行化。解决脏读、不可重复读、幻读。'],
     ['数据库', 'MySQL', 'MySQL的存储引擎？', 'InnoDB（事务、行锁、外键）、MyISAM（表锁、全文索引，不支持事务）、Memory（内存）。'],
-    ['数据库', 'SQL', '什么是索引失效？', '函数操作（WHERE LEFT(name,3)）、隐式类型转换、OR条件、LIKE '%xx'、NOT IN等。'],
+    ['数据库', 'SQL', '什么是索引失效？', '函数操作（WHERE LEFT(name,3)）、隐式类型转换、OR条件、LIKE %%xx、NOT IN等。'],
     ['数据库', '事务', '什么是MVCC？', '多版本并发控制，通过Undo Log保存快照。实现读已提交和可重复读。'],
     ['数据库', '优化', '如何优化慢查询？', 'explain分析、加索引、避免回表（覆盖索引）、分页优化（延迟关联）。'],
     ['数据库', 'MySQL', '主从复制的原理？', '主库binlog转存到从库中继日志，SQL线程重放。异步、半同步、全同步。'],
@@ -141,3 +253,5 @@ const seedSampleQuestions = async () => {
     `, [q[0], q[1], q[2], q[3], 'medium']);
   }
 };
+
+export default { run, get, all, initDb };

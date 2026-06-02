@@ -1,0 +1,238 @@
+import express from 'express';
+import db from '../db';
+import { authMiddleware } from '../auth';
+import axios from 'axios';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const router = express.Router();
+router.use(authMiddleware);
+
+const AI_API_KEY = process.env.AI_API_KEY || '';
+const AI_BASE_URL = process.env.AI_API_BASE_URL || 'https://api.openai.com/v1';
+const AI_MODEL = process.env.AI_MODEL || 'gpt-3.5-turbo';
+
+const callAi = async (messages: any[]) => {
+  if (!AI_API_KEY) throw new Error('AI_API_KEY 未配置');
+  try {
+    const response = await axios.post(
+      AI_BASE_URL + '/chat/completions',
+      { model: AI_MODEL, messages, temperature: 0.7, stream: false },
+      { headers: { 'Authorization': 'Bearer ' + AI_API_KEY, 'Content-Type': 'application/json' }, timeout: 60000 }
+    );
+    return response.data.choices[0].message.content;
+  } catch (error: any) {
+    throw new Error('AI服务调用失败：' + (error.response?.data?.error?.message || error.message));
+  }
+};
+
+// ============ AI 流式问答（SSE）- 供前端直接调用 ============
+router.post('/ask', async (req, res) => {
+  const { question, userAnswer } = req.body;
+  if (!question) return res.status(400).json({ error: '问题不能为空' });
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+
+  if (!AI_API_KEY) {
+    res.write('data: ' + JSON.stringify({ error: 'AI服务未配置' }) + '\n\n');
+    res.write('data: [DONE]\n\n');
+    return res.end();
+  }
+
+  const systemPrompt = '你是一个Java技术面试辅导专家，精通Java八股文。请用中文回答。';
+  const userPrompt = userAnswer
+    ? '问题：' + question + '\n用户的回答：' + userAnswer + '\n请评价并给出标准答案。'
+    : '问题：' + question + '\n请给出详细准确的答案。';
+
+  try {
+    let buffer = '';
+    const response = await axios.post(
+      AI_BASE_URL + '/chat/completions',
+      { model: AI_MODEL, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }], temperature: 0.7, stream: true },
+      { headers: { 'Authorization': 'Bearer ' + AI_API_KEY, 'Content-Type': 'application/json' }, responseType: 'stream', timeout: 15000 }
+    );
+
+    let fullContent = '';
+    let hasData = false;
+    response.data.on('data', (chunk: Buffer) => {
+      hasData = true;
+      buffer += chunk.toString();
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data: ')) continue;
+        const dataStr = trimmed.slice(6).trim();
+        if (dataStr === '[DONE]') { return; }
+        try {
+          const parsed = JSON.parse(dataStr);
+          const content = parsed.choices?.[0]?.delta?.content || parsed.choices?.[0]?.text || parsed.content || '';
+          if (content) { fullContent += content; res.write('data: ' + JSON.stringify({ content }) + '\n\n'); }
+        } catch (e) { }
+      }
+    });
+    response.data.on('end', () => {
+      if (!fullContent) {
+        // 流式失败 → 非流式重试
+        axios.post(
+          AI_BASE_URL + '/chat/completions',
+          { model: AI_MODEL, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }], temperature: 0.7, stream: false },
+          { headers: { 'Authorization': 'Bearer ' + AI_API_KEY, 'Content-Type': 'application/json' }, timeout: 15000 }
+        ).then(async (fbRes) => {
+          const text = fbRes.data.choices?.[0]?.message?.content || fbRes.data.choices?.[0]?.text || fbRes.data.content || '';
+          if (text) {
+            res.write('data: ' + JSON.stringify({ content: text }) + '\n\n');
+          } else {
+            await sendLocalAnswer(question, userAnswer, res);
+          }
+          res.write('data: [DONE]\n\n');
+          res.end();
+        }).catch(async () => {
+          await sendLocalAnswer(question, userAnswer, res);
+          res.write('data: [DONE]\n\n');
+          res.end();
+        });
+      } else {
+        res.write('data: [DONE]\n\n');
+        res.end();
+      }
+    });
+    response.data.on('error', async () => {
+      await sendLocalAnswer(question, userAnswer, res);
+      res.write('data: [DONE]\n\n');
+      res.end();
+    });
+  } catch (error: any) {
+    await sendLocalAnswer(question, userAnswer, res);
+    res.write('data: [DONE]\n\n');
+    res.end();
+  }
+});
+
+// 内置知识库兜底
+async function sendLocalAnswer(question: string, userAnswer: string | undefined, res: any) {
+  try {
+    const dbModule = await import('../db');
+    // 在题库中搜索匹配
+    const rows = await dbModule.all('SELECT answer, question FROM questions WHERE question LIKE ? LIMIT 1', ['%' + question.replace(/[?？]/g, '').substring(0, 20) + '%']);
+    if (rows && rows.length > 0) {
+      const reply = userAnswer
+        ? '**问题：**' + question + '\n\n用户的回答：' + userAnswer + '\n\n**标准答案：**\n' + rows[0].answer
+        : '**答案：**\n' + rows[0].answer;
+      res.write('data: ' + JSON.stringify({ content: reply }) + '\n\n');
+      return;
+    }
+    // 没匹配到，返回友好提示
+    res.write('data: ' + JSON.stringify({ content: '⚠️ AI服务暂时不可用（DeepSeek账号池无可用账号）。\n\n建议：\n1. 使用「显示答案」按钮查看标准答案\n2. 在题目搜索页面搜索相关知识点\n3. 修复 ds-free-api 的账号配置后重启服务' }) + '\n\n');
+  } catch (e) {
+    res.write('data: ' + JSON.stringify({ content: '⚠️ AI服务暂时不可用，请稍后再试。' }) + '\n\n');
+  }
+}
+
+// ============ AI聊天咨询（支持持续对话） ============
+router.post('/chat/new', async (req, res) => {
+  try {
+    const result = await db.run(
+      'INSERT INTO ai_conversations (user_id, title, messages) VALUES (?, ?, ?)',
+      [req.user.userId, req.body.title || '新对话', '[]']
+    );
+    res.json({ id: result.lastID, title: req.body.title || '新对话', messages: [] });
+  } catch (error) { res.status(500).json({ error: '创建对话失败' }); }
+});
+
+router.get('/chat/list', async (req, res) => {
+  try {
+    const convos = await db.all(
+      'SELECT id, title, created_at, updated_at FROM ai_conversations WHERE user_id = ? ORDER BY updated_at DESC LIMIT 50',
+      [req.user.userId]
+    );
+    res.json(convos);
+  } catch (error) { res.status(500).json({ error: '获取对话列表失败' }); }
+});
+
+router.get('/chat/:id', async (req, res) => {
+  try {
+    const convo = await db.get('SELECT id, title, messages FROM ai_conversations WHERE id = ? AND user_id = ?', [req.params.id, req.user.userId]);
+    if (!convo) return res.status(404).json({ error: '对话不存在' });
+    res.json({ id: convo.id, title: convo.title, messages: JSON.parse(convo.messages || '[]') });
+  } catch (error) { res.status(500).json({ error: '获取对话失败' }); }
+});
+
+router.post('/chat/:id/message', async (req, res) => {
+  try {
+    const { message } = req.body;
+    if (!message) return res.status(400).json({ error: '消息不能为空' });
+
+    const convo = await db.get('SELECT id, messages FROM ai_conversations WHERE id = ? AND user_id = ?', [req.params.id, req.user.userId]);
+    if (!convo) return res.status(404).json({ error: '对话不存在' });
+
+    const messages = JSON.parse(convo.messages || '[]');
+    messages.push({ role: 'user', content: message });
+
+    const reply = await callAi([{ role: 'system', content: '你是一个Java技术面试辅导专家。' }, ...messages]);
+    messages.push({ role: 'assistant', content: reply });
+
+    const firstUserMsg = messages.find((m: any) => m.role === 'user');
+    const title = convo.title || (firstUserMsg ? firstUserMsg.content.substring(0, 30) : 'Java咨询');
+    await db.run('UPDATE ai_conversations SET messages = ?, title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [JSON.stringify(messages), title, req.params.id]);
+
+    res.json({ reply, messages });
+  } catch (error: any) { res.status(500).json({ error: error.message || 'AI咨询失败' }); }
+});
+
+router.delete('/chat/:id', async (req, res) => {
+  try {
+    await db.run('DELETE FROM ai_conversations WHERE id = ? AND user_id = ?', [req.params.id, req.user.userId]);
+    res.json({ message: '对话已删除' });
+  } catch (error) { res.status(500).json({ error: '删除失败' }); }
+});
+
+// ============ AI生成题目 ============
+router.post('/generate', async (req, res) => {
+  try {
+    const { topic, count = 5, saveToCustom = true } = req.body;
+    if (!topic) return res.status(400).json({ error: '请指定主题' });
+
+    const finalCount = Math.min(Math.max(count, 1), 20);
+    const prompt = '你是一个Java面试题专家。请生成 ' + finalCount + ' 道关于 "' + topic + '" 的Java面试题。\n\n以JSON数组格式返回：\n[{"question":"问题","answer":"答案"}]\n';
+
+    const reply = await callAi([{ role: 'system', content: '你是一个专业的Java面试题库生成器。请严格按照要求格式返回JSON。' }, { role: 'user', content: prompt }]);
+
+    let generatedQuestions;
+    try {
+      let cleaned = reply.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+      generatedQuestions = JSON.parse(cleaned);
+      if (!Array.isArray(generatedQuestions)) throw new Error('not array');
+    } catch (e) {
+      return res.json({ parsed: false, raw: reply, message: 'AI返回格式异常' });
+    }
+
+    let savedCount = 0;
+    if (saveToCustom) {
+      for (const q of generatedQuestions) {
+        if (!q.question || !q.answer) continue;
+        await db.run('INSERT INTO custom_questions (user_id, category, subcategory, question, answer, tags) VALUES (?, ?, ?, ?, ?, ?)',
+          [req.user.userId, topic, 'AI生成', q.question, q.answer, 'ai-generated']);
+        savedCount++;
+      }
+    }
+
+    res.json({ parsed: true, count: generatedQuestions.length, saved: savedCount, questions: generatedQuestions });
+  } catch (error: any) { res.status(500).json({ error: error.message || 'AI生成失败' }); }
+});
+
+// ============ AI配置状态 ============
+router.get('/config', async (req, res) => {
+  res.json({
+    configured: !!AI_API_KEY,
+    base_url: AI_BASE_URL,
+    model: AI_MODEL,
+    tip: AI_API_KEY ? 'AI服务已配置' : '请在.env中设置AI_API_KEY'
+  });
+});
+
+export default router;
