@@ -1,6 +1,8 @@
 ﻿﻿import express from 'express';
 import db from '../db';
 import { authMiddleware } from '../auth';
+import { sm2, SELF_ASSESSMENTS } from '../utils/sm2';
+import type { SelfAssessment } from '../utils/sm2';
 
 const router = express.Router();
 
@@ -95,7 +97,7 @@ router.get('/:id', async (req, res) => {
 
 router.post('/:id/answer', async (req, res) => {
   try {
-    const { userAnswer, tech_domain } = req.body;
+    const { userAnswer, tech_domain, self_assessment } = req.body;
     const userId = req.user.userId;
     const questionId = parseInt(req.params.id);
 
@@ -106,12 +108,33 @@ router.post('/:id/answer', async (req, res) => {
 
     const isCorrect = userAnswer && userAnswer.trim().toLowerCase() === question.answer.trim().toLowerCase();
 
-    await db.run(
-      'INSERT INTO user_progress (user_id, question_id, is_correct, interaction_type, tech_domain) VALUES (?, ?, ?, ?, ?)',
-      [userId, questionId, isCorrect, 'answer', tech_domain || question.tech_domain || 'java']
+    // 查询上一次的 SM-2 参数
+    const lastProgress = await db.get(
+      'SELECT review_interval, ease_factor, self_assessment FROM user_progress WHERE user_id = ? AND question_id = ? AND interaction_type = ? ORDER BY answered_at DESC LIMIT 1',
+      [userId, questionId, 'answer']
     );
 
-    res.json({ isCorrect, correctAnswer: question.answer });
+    // 如果传了自评，执行 SM-2 计算
+    let sm2Result = null;
+    if (self_assessment && SELF_ASSESSMENTS.includes(self_assessment as SelfAssessment)) {
+      sm2Result = sm2(
+        self_assessment as SelfAssessment,
+        lastProgress?.review_interval || 0,
+        lastProgress?.ease_factor || 2.5,
+        lastProgress?.self_assessment === 'remembered' ? 1 : 0,
+      );
+    }
+
+    await db.run(
+      'INSERT INTO user_progress (user_id, question_id, is_correct, interaction_type, tech_domain, self_assessment, review_interval, ease_factor, next_review_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [userId, questionId, isCorrect, 'answer', tech_domain || question.tech_domain || 'java',
+       self_assessment || null,
+       sm2Result?.intervalHours || null,
+       sm2Result?.easeFactor || null,
+       sm2Result?.nextReviewAt || null]
+    );
+
+    res.json({ isCorrect, correctAnswer: question.answer, sm2: sm2Result });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: '提交答案失败' });
@@ -194,14 +217,105 @@ router.get('/progress/stats', async (req, res) => {
       sql += ' AND interaction_type = "answer"';
     }
     const stats = await db.get(sql, params);
-    res.json(stats);
+
+    // 待复习数量
+    let dueSql = `
+      SELECT COUNT(*) as due_count FROM questions q
+      INNER JOIN (
+        SELECT question_id, MAX(answered_at) as max_at
+        FROM user_progress WHERE user_id = ? AND interaction_type = 'answer'
+        GROUP BY question_id
+      ) latest ON q.id = latest.question_id
+      LEFT JOIN user_progress up ON up.user_id = ? AND up.question_id = q.id AND up.answered_at = latest.max_at
+      WHERE (up.next_review_at IS NULL OR up.next_review_at <= datetime('now'))
+    `;
+    const dueParams: any[] = [userId, userId];
+    if (domain) {
+      dueSql += ' AND q.tech_domain = ?';
+      dueParams.push(domain);
+    }
+    const dueResult = await db.get(dueSql, dueParams);
+
+    res.json({ ...stats, due_count: dueResult?.due_count || 0 });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: '获取统计失败' });
   }
 });
 
-// 删除题目
+// 到期复习题目
+router.get('/due', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { domain, limit = 10 } = req.query;
+
+    let sql = `
+      SELECT q.id, q.category, q.subcategory, q.question, q.difficulty, q.tags, q.tech_domain,
+             up.next_review_at, up.review_interval, up.ease_factor, up.self_assessment as last_assessment
+      FROM questions q
+      INNER JOIN (
+        SELECT question_id, MAX(answered_at) as max_at
+        FROM user_progress WHERE user_id = ? AND interaction_type = 'answer'
+        GROUP BY question_id
+      ) latest ON q.id = latest.question_id
+      LEFT JOIN user_progress up ON up.user_id = ? AND up.question_id = q.id AND up.answered_at = latest.max_at
+      WHERE (up.next_review_at IS NULL OR up.next_review_at <= datetime('now'))
+    `;
+    const params: any[] = [userId, userId];
+
+    if (domain) {
+      sql += ' AND q.tech_domain = ?';
+      params.push(domain);
+    }
+
+    sql += ' ORDER BY RANDOM() LIMIT ?';
+    params.push(Number(limit));
+
+    const questions = await db.all(sql, params);
+    res.json(questions);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: '获取到期题目失败' });
+  }
+});
+
+// 到期复习题目
+router.get('/due', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { domain, limit = 10 } = req.query;
+
+    let sql = `
+      SELECT q.id, q.category, q.subcategory, q.question, q.difficulty, q.tags, q.tech_domain,
+             up.next_review_at, up.review_interval, up.ease_factor, up.self_assessment as last_assessment
+      FROM questions q
+      INNER JOIN (
+        SELECT question_id, MAX(answered_at) as max_at
+        FROM user_progress WHERE user_id = ? AND interaction_type = 'answer'
+        GROUP BY question_id
+      ) latest ON q.id = latest.question_id
+      LEFT JOIN user_progress up ON up.user_id = ? AND up.question_id = q.id AND up.answered_at = latest.max_at
+      WHERE (up.next_review_at IS NULL OR up.next_review_at <= datetime('now'))
+    `;
+    const params: any[] = [userId, userId];
+
+    if (domain) {
+      sql += ' AND q.tech_domain = ?';
+      params.push(domain);
+    }
+
+    sql += ' ORDER BY RANDOM() LIMIT ?';
+    params.push(Number(limit));
+
+    const questions = await db.all(sql, params);
+    res.json(questions);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: '获取到期题目失败' });
+  }
+});
+
+// 删除题目// 删除题目
 router.delete('/:id', async (req, res) => {
   try {
     const questionId = parseInt(req.params.id);

@@ -306,6 +306,7 @@
 
         // ---- 侧边栏拖拉排序 ----
         let _dragCode = null;
+        let _recallMode = localStorage.getItem('recallMode') === 'true';
         document.getElementById('sidebar').addEventListener('dragstart', (e) => {
             const item = e.target.closest('.sidebar-item');
             if (!item || !item.draggable) return;
@@ -728,7 +729,8 @@
                 if (selectedCat !== 'all') qs = qs.filter(q => q.category === selectedCat);
                 qs = qs.sort(() => Math.random() - 0.5).slice(0, 5);
                 const hideInp = localStorage.getItem('hidePracticeInput') === 'true';
-                c.innerHTML = '<h2>随机练习 <button class="btn btn-ai" onclick="refreshPractice()" style="float:right;">🔄 刷新题目</button> <select id="pracCat" onchange="refreshPractice()" style="float:right;margin-right:8px;padding:6px;border:1px solid var(--border-color);border-radius:5px;font-size:13px;background:var(--input-bg);color:var(--text-primary);"><option value="all">全部分类</option>' +
+                const modeLabel = _recallMode ? '🧠 回忆' : '📖 展示';
+                c.innerHTML = '<h2>随机练习 <button class="btn btn-ai" onclick="refreshPractice()" style="float:right;">🔄 刷新题目</button> <button class="btn" onclick="toggleRecallMode()" style="float:right;margin-right:8px;padding:6px 12px;border:1px solid var(--border-color);border-radius:5px;font-size:13px;background:var(--input-bg);color:var(--text-primary);cursor:pointer;">' + modeLabel + '</button> <select id="pracCat" onchange="refreshPractice()" style="float:right;margin-right:8px;padding:6px;border:1px solid var(--border-color);border-radius:5px;font-size:13px;background:var(--input-bg);color:var(--text-primary);"><option value="all">全部分类</option>' +
                     cats.map(cat => '<option value="' + cat + '"' + (selectedCat === cat ? ' selected' : '') + '>' + cat + '</option>').join('') + '</select></h2>';
                 for (const q of qs) {
                     const div = document.createElement('div'); div.className = 'question-card';
@@ -764,20 +766,28 @@
                 cats.map(cat => '<option value="' + cat + '"' + (selectedCat === cat ? ' selected' : '') + '>' + cat + '</option>').join('') + '</select></h2>';
             for (const q of qs) {
                 const div = document.createElement('div'); div.className = 'question-card';
+                div.id = 'qc-' + q.id;
                 div.innerHTML = '<div><span class="question-category">' + q.category + (q.subcategory?' - '+q.subcategory:'') + '</span><span class="question-title">' + q.question + '</span></div>' +
-                    (hideInp ? '' : '<input class="answer-input" id="a-' + q.id + '" placeholder="输入你的答案">' +
-                    '<div class="btn-group">' +
-                    '<button class="btn btn-primary" onclick="submitAns(' + q.id + ')">提交答案</button>') +
-                    (hideInp ? '<div class="btn-group">' : '') +
-                    '<button class="btn btn-ai" onclick="askAI(' + q.id + ',\'' + q.question.replace(/'/g,"\\'") + '\')">🤖 AI</button>' +
-                    '<button class="btn btn-fav" id="fb-' + q.id + '" onclick="toggleFav(' + q.id + ',this)">♡ 收藏</button></div>' +
-                    '<div class="result" id="r-' + q.id + '"></div>';
+                    (_recallMode
+                        ? '<div class="btn-group" style="margin-top:8px;"><button class="btn btn-primary" onclick="showAnswer(' + q.id + ')">👁️ 显示答案</button></div>' +
+                          '<div class="result" id="r-' + q.id + '" style="display:none;"></div>' +
+                          '<div class="btn-group recall-btns" id="rb-' + q.id + '" style="display:none;margin-top:8px;gap:6px;">' +
+                          '<button class="btn" style="background:#48bb78;color:#fff;" onclick="submitRecall(' + q.id + ",'remembered'" + ')">🟢 记得</button>' +
+                          '<button class="btn" style="background:#ecc94b;color:#1a202c;" onclick="submitRecall(' + q.id + ",'hazy'" + ')">🟡 模糊</button>' +
+                          '<button class="btn" style="background:#e53e3e;color:#fff;" onclick="submitRecall(' + q.id + ",'forgot'" + ')">🔴 忘了</button></div>'
+                        : (hideInp ? '' : '<input class="answer-input" id="a-' + q.id + '" placeholder="输入你的答案">' +
+                          '<div class="btn-group" style="margin-top:6px;">' +
+                          '<button class="btn btn-primary" onclick="submitAns(' + q.id + ')">提交答案</button>') +
+                          (hideInp ? '<div class="btn-group" style="margin-top:6px;">' : '')
+                    ) +
+                    '<div class="btn-group" style="margin-top:6px;">' +
+                    '<button class="btn btn-ai" onclick="askAI(' + q.id + ",'" + q.question.replace(/'/g,"\'") + "'" + ')">🤖 AI</button>' +
+                    '<button class="btn btn-fav" id="fb-' + q.id + '" onclick="toggleFav(' + q.id + ',this)">♡ 收藏</button></div>';
                 c.appendChild(div); checkFav(q.id, document.getElementById('fb-' + q.id));
             }
             if (!qs || qs.length === 0) {
                 c.innerHTML = (c.innerHTML || '') + '<div class="empty-state" style="margin-top:20px;"><div class="icon">📭</div><h3>该分类下暂无题目</h3><p>请切换分类或前往「管理题目」添加题目</p></div>';
-            }
-            window._prac = c.innerHTML;
+            }window._prac = c.innerHTML;
         }
         async function submitAns(qid) {
             const a = document.getElementById('a-' + qid).value;
@@ -1161,6 +1171,53 @@
                 }
             } catch (e) {
                 res.innerHTML = '<div style="color:#e53e3e;">❌ 生成失败：' + e.message + '</div>';
+            }
+        }
+
+        // ---- 主动回忆模式 ----
+        function toggleRecallMode() {
+            _recallMode = !_recallMode;
+            localStorage.setItem('recallMode', _recallMode);
+            window._prac = null;
+            refreshPractice();
+        }
+
+        function showAnswer(qid, question) {
+            const r = document.getElementById('r-' + qid);
+            if (!r) return;
+            // 从后端获取答案
+            api('GET', '/api/questions/' + qid).then(q => {
+                r.style.display = 'block';
+                r.className = 'result';
+                r.innerHTML = '<strong>参考答案：</strong>' + (q.answer || '暂无答案');
+                const btns = document.getElementById('rb-' + qid);
+                if (btns) btns.style.display = 'flex';
+            }).catch(() => {
+                r.style.display = 'block';
+                r.innerHTML = '获取答案失败';
+            });
+        }
+
+        async function submitRecall(qid, assessment) {
+            try {
+                const d = await api('POST', '/api/questions/' + qid + '/answer', {
+                    userAnswer: '', tech_domain: currentDomain.code, self_assessment: assessment
+                });
+                const r = document.getElementById('r-' + qid);
+                if (r) {
+                    r.style.display = 'block';
+                    r.className = 'result';
+                    if (d.sm2) {
+                        const labels = { remembered: '🟢 记得', hazy: '🟡 模糊', forgot: '🔴 忘了' };
+                        const emojis = { remembered: '✅', hazy: '⚠️', forgot: '❌' };
+                        r.innerHTML = emojis[assessment] + ' 自评：' + labels[assessment] +
+                            '<br><small style="color:#718096;">下次复习：' + new Date(d.sm2.nextReviewAt).toLocaleString('zh-CN', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) + '</small>';
+                    }
+                }
+                document.getElementById('rb-' + qid)?.remove();
+                await updateStats();
+            } catch(e) {
+                toast('提交失败：' + e.message, '❌');
             }
         }
 

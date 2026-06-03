@@ -118,6 +118,23 @@ const initDb = async () => {
         await (0, exports.run)(`ALTER TABLE user_progress ADD COLUMN tech_domain TEXT DEFAULT 'java'`);
     }
     catch (e) { }
+    // SM-2 间隔重复字段
+    try {
+        await (0, exports.run)(`ALTER TABLE user_progress ADD COLUMN self_assessment TEXT CHECK(self_assessment IN ('forgot', 'hazy', 'remembered'))`);
+    }
+    catch (e) { }
+    try {
+        await (0, exports.run)(`ALTER TABLE user_progress ADD COLUMN next_review_at DATETIME`);
+    }
+    catch (e) { }
+    try {
+        await (0, exports.run)(`ALTER TABLE user_progress ADD COLUMN review_interval INTEGER DEFAULT 0`);
+    }
+    catch (e) { }
+    try {
+        await (0, exports.run)(`ALTER TABLE user_progress ADD COLUMN ease_factor REAL DEFAULT 2.5`);
+    }
+    catch (e) { }
     try {
         await (0, exports.run)(`ALTER TABLE questions ADD COLUMN tech_domain TEXT DEFAULT 'java'`);
     }
