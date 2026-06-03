@@ -15,6 +15,7 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 7777;
+const LISTENER = process.env.LISTENER || '127.0.0.1';
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
@@ -72,7 +73,7 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
-app.listen(Number(PORT), '0.0.0.0', async () => {
+app.listen(Number(PORT), LISTENER, async () => {
   await db.initDb();
   console.log('Server running on http://localhost:' + PORT);
   console.log('API endpoints:');
