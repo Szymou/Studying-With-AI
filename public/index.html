@@ -1440,7 +1440,7 @@
             c.innerHTML = '<h2>🤖 AI 咨询</h2>' +
                 '<div style="display:flex;gap:0;border:1px solid var(--border-color);border-radius:10px;overflow:hidden;">' + convoListHtml +
                 '<div class="ai-chat-box" style="border:none;border-radius:0;flex:1;height:60vh;"><div class="ai-chat-msgs" id="aiMsgs">' + msgsHtml +
-                '</div><div class="ai-chat-input"><input id="aiInp" placeholder="输入问题..." onkeydown="if(event.key===\'Enter\') sendChat()"><button class="btn btn-ai" onclick="sendChat()">发送</button></div></div></div>';
+                '</div><div class="ai-chat-input"><input id="aiInp" placeholder="输入问题..." onkeydown="if(event.key===\'Enter\') sendChat()"><button class="btn btn-ai" onclick="sendChat()" style="margin-left:4px;">发送</button><button class="btn" id="chatTtsBtn" onclick="toggleChatTTS()" title="自动朗读AI回答" style="font-size:16px;padding:6px 10px;border:1px solid var(--border-color);border-radius:5px;background:var(--input-bg);cursor:pointer;">' + (localStorage.getItem('chatTTS') === 'true' ? '🔊' : '🔇') + '</button></div></div></div>';
             const msgsDiv = document.getElementById('aiMsgs');
             if (msgsDiv) msgsDiv.scrollTop = msgsDiv.scrollHeight;
             window._aiConvoId = convoId;
@@ -1498,8 +1498,28 @@
                     }
                 }
                 if (!full) ad.innerHTML = '<div class="role">AI</div>⚠️ 未收到有效回复';
+                // 自动朗读
+                if (full && localStorage.getItem('chatTTS') === 'true') {
+                    const utterance = new SpeechSynthesisUtterance(full.replace(/<[^>]+>/g, ''));
+                    utterance.lang = 'zh-CN';
+                    utterance.rate = parseFloat(localStorage.getItem('ttsSpeed')) || 1.0;
+                    const savedVoice = localStorage.getItem('ttsVoice');
+                    if (savedVoice) {
+                        const voices = window.speechSynthesis?.getVoices() || [];
+                        const idx = parseInt(savedVoice);
+                        if (voices[idx]) utterance.voice = voices[idx];
+                    }
+                    window.speechSynthesis?.speak(utterance);
+                }
             } catch(e) { ad.innerHTML = '<div class="role">AI</div>⚠️ ' + e.message; }
             finally { inp.disabled = false; inp.focus(); }
+        }
+
+        function toggleChatTTS() {
+            const v = localStorage.getItem('chatTTS') !== 'true';
+            localStorage.setItem('chatTTS', v);
+            const btn = document.getElementById('chatTtsBtn');
+            if (btn) btn.textContent = v ? '🔊' : '🔇';
         }
 
         async function newChat() {
