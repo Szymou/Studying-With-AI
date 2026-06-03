@@ -1440,11 +1440,16 @@
             c.innerHTML = '<h2>🤖 AI 咨询</h2>' +
                 '<div style="display:flex;gap:0;border:1px solid var(--border-color);border-radius:10px;overflow:hidden;">' + convoListHtml +
                 '<div class="ai-chat-box" style="border:none;border-radius:0;flex:1;height:60vh;"><div class="ai-chat-msgs" id="aiMsgs">' + msgsHtml +
-                '</div><div class="ai-chat-input"><input id="aiInp" placeholder="输入问题..." onkeydown="if(event.key===\'Enter\') sendChat()"><button class="btn btn-ai" onclick="sendChat()" style="margin-left:4px;">发送</button><button class="btn" id="chatTtsBtn" onclick="toggleChatTTS()" title="自动朗读AI回答" style="font-size:16px;padding:6px 10px;border:1px solid var(--border-color);border-radius:5px;background:var(--input-bg);cursor:pointer;">' + (localStorage.getItem('chatTTS') === 'true' ? '🔊' : '🔇') + '</button></div></div></div>';
+                '</div><div class="ai-chat-input"><input id="aiInp" placeholder="输入问题..." onkeydown="if(event.key===\'Enter\') sendChat()"><button class="btn btn-ai" onclick="sendChat()" style="margin-left:4px;">发送</button><button class="btn" id="chatTtsBtn" onclick="toggleChatTTS()" title="自动朗读AI回答" style="font-size:16px;padding:6px 10px;border:1px solid var(--border-color);border-radius:5px;background:var(--input-bg);cursor:pointer;">' + (localStorage.getItem('chatTTS') === 'true' ? '🔊' : '🔇') + '</button><select id="chatSpeedSelect" style="display:' + (localStorage.getItem('chatTTS') === 'true' ? '' : 'none') + ';padding:4px 6px;border:1px solid var(--border-color);border-radius:5px;font-size:11px;background:var(--input-bg);color:var(--text-primary);"><option value="0.5">0.5x</option><option value="0.8">0.8x</option><option value="1.0" selected>1x</option><option value="1.3">1.3x</option><option value="1.5">1.5x</option><option value="2.0">2x</option></select></div></div></div>';
             const msgsDiv = document.getElementById('aiMsgs');
             if (msgsDiv) msgsDiv.scrollTop = msgsDiv.scrollHeight;
             window._aiConvoId = convoId;
             window._aiConvos = convos;
+            // 恢复语速选择
+            const speedSel = document.getElementById('chatSpeedSelect');
+            if (speedSel && localStorage.getItem('chatSpeed')) speedSel.value = localStorage.getItem('chatSpeed');
+            // 语速变化时保存
+            if (speedSel) speedSel.onchange = () => localStorage.setItem('chatSpeed', speedSel.value);
         }
         
         async function sendChat() {
@@ -1473,6 +1478,7 @@
                 const reader = r.body.getReader();
                 const dec = new TextDecoder();
                 let full = '', buf = '', first = true;
+                let _chatReadOffset = 0;
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
@@ -1491,6 +1497,26 @@
                                 if (first) { ad.innerHTML = '<div class="role">AI</div>'; first = false; }
                                 ad.innerHTML = '<div class="role">AI</div>' + renderMd(full);
                                 msgs.scrollTop = msgs.scrollHeight;
+                                // 即刻朗读增量内容
+                                if (localStorage.getItem('chatTTS') === 'true') {
+                                    const plain = full.replace(/<[^>]+>/g, '');
+                                    const newText = plain.slice(_chatReadOffset);
+                                    if (newText.length > 5) { // 至少 5 个字再读
+                                        const speedSel = document.getElementById('chatSpeedSelect');
+                                        const rate = speedSel ? parseFloat(speedSel.value) || 1.0 : 1.0;
+                                        const utterance = new SpeechSynthesisUtterance(newText);
+                                        utterance.lang = 'zh-CN';
+                                        utterance.rate = rate;
+                                        const savedVoice = localStorage.getItem('ttsVoice');
+                                        if (savedVoice) {
+                                            const voices = window.speechSynthesis?.getVoices() || [];
+                                            const idx = parseInt(savedVoice);
+                                            if (voices[idx]) utterance.voice = voices[idx];
+                                        }
+                                        window.speechSynthesis?.speak(utterance);
+                                        _chatReadOffset = plain.length;
+                                    }
+                                }
                             } else if (p.error) {
                                 ad.innerHTML = '<div class="role">AI</div>⚠️ ' + p.error;
                             }
@@ -1498,19 +1524,6 @@
                     }
                 }
                 if (!full) ad.innerHTML = '<div class="role">AI</div>⚠️ 未收到有效回复';
-                // 自动朗读
-                if (full && localStorage.getItem('chatTTS') === 'true') {
-                    const utterance = new SpeechSynthesisUtterance(full.replace(/<[^>]+>/g, ''));
-                    utterance.lang = 'zh-CN';
-                    utterance.rate = parseFloat(localStorage.getItem('ttsSpeed')) || 1.0;
-                    const savedVoice = localStorage.getItem('ttsVoice');
-                    if (savedVoice) {
-                        const voices = window.speechSynthesis?.getVoices() || [];
-                        const idx = parseInt(savedVoice);
-                        if (voices[idx]) utterance.voice = voices[idx];
-                    }
-                    window.speechSynthesis?.speak(utterance);
-                }
             } catch(e) { ad.innerHTML = '<div class="role">AI</div>⚠️ ' + e.message; }
             finally { inp.disabled = false; inp.focus(); }
         }
@@ -1520,6 +1533,8 @@
             localStorage.setItem('chatTTS', v);
             const btn = document.getElementById('chatTtsBtn');
             if (btn) btn.textContent = v ? '🔊' : '🔇';
+            const speedSel = document.getElementById('chatSpeedSelect');
+            if (speedSel) speedSel.style.display = v ? '' : 'none';
         }
 
         async function newChat() {
