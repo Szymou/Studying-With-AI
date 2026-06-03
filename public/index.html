@@ -633,8 +633,23 @@
             const btn = document.getElementById('aiSpeakBtn');
             if (btn) btn.textContent = '🔊 朗读';
         }
-        function playTTS(text) {
+        function playTTS(rawText) {
             if (_speaking) { stopTTS(); return; }
+            // 清洗 Markdown 符号
+            const text = rawText
+                .replace(/<[^>]+>/g, '')
+                .replace(/```[\s\S]*?```/g, '')
+                .replace(/`([^`]+)`/g, '$1')
+                .replace(/\*\*([^*]+)\*\*/g, '$1')
+                .replace(/\*([^*]+)\*/g, '$1')
+                .replace(/#{1,6}\s*/g, '')
+                .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+                .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+                .replace(/[>\|]/g, '')
+                .replace(/[-*_]{3,}/g, '')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+            if (!text) return;
             _speaking = true;
             const engine = localStorage.getItem('ttsEngine') || 'browser';
             const rate = parseFloat(localStorage.getItem('ttsRate') || '1.0');
@@ -1610,6 +1625,8 @@
         }
 
         function toggleChatTTS() {
+            // 如果正在播放则停止
+            if (_speaking) { stopTTS(); return; }
             const v = localStorage.getItem('chatTTS') !== 'true';
             localStorage.setItem('chatTTS', v);
             const btn = document.getElementById('chatTtsBtn');
