@@ -3,6 +3,7 @@ import db from '../db';
 import { authMiddleware } from '../auth';
 import axios from 'axios';
 import dotenv from 'dotenv';
+import { isDuplicateQuestion } from '../utils/similarity';
 
 dotenv.config();
 
@@ -467,16 +468,22 @@ router.post('/generate', async (req, res) => {
           if (!Array.isArray(generatedQuestions)) throw new Error('not array');
 
           let savedCount = 0;
+          let skippedCount = 0;
           if (saveToCustom) {
             for (const q of generatedQuestions) {
               if (!q.question || !q.answer) continue;
+              const dup = await isDuplicateQuestion(q.question, tech_domain || 'java', db);
+              if (dup.isDuplicate) {
+                skippedCount++;
+                continue;
+              }
               await db.run('INSERT INTO custom_questions (user_id, category, subcategory, question, answer, tags, tech_domain) VALUES (?, ?, ?, ?, ?, ?, ?)',
                 [req.user.userId, topic, 'AI生成', q.question, q.answer, 'ai-generated', tech_domain || 'java']);
               savedCount++;
             }
           }
 
-          res.write('data: ' + JSON.stringify({ type: 'done', parsed: true, count: generatedQuestions.length, saved: savedCount, questions: generatedQuestions }) + '\n\n');
+          res.write('data: ' + JSON.stringify({ type: 'done', parsed: true, count: generatedQuestions.length, saved: savedCount, skipped: skippedCount, questions: generatedQuestions }) + '\n\n');
         } catch (e) {
           res.write('data: ' + JSON.stringify({ type: 'done', parsed: false, raw: fullContent, message: 'AI返回格式异常' }) + '\n\n');
         }
@@ -639,6 +646,12 @@ router.post('/generate-domain', async (req, res) => {
             try {
               const diffMap: Record<string, string> = { 'easy': 'easy', 'medium': 'medium', 'hard': 'hard', 'beginner': 'easy', 'elementary': 'easy', 'intermediate': 'medium', 'advanced': 'hard', 'expert': 'hard' };
               const difficulty = diffMap[(q.difficulty || 'medium').toLowerCase().trim()] || 'medium';
+              // 去重校验
+              const dup = await isDuplicateQuestion(q.question, domainInfo.code, db);
+              if (dup.isDuplicate) {
+                console.log('⏭️ 跳过重复题目:', q.question.substring(0, 60));
+                continue;
+              }
               await db.run(
                 'INSERT INTO questions (category, subcategory, question, answer, difficulty, tags, tech_domain) VALUES (?, ?, ?, ?, ?, ?, ?)',
                 [q.category || '基础', q.subcategory || '', q.question, q.answer, difficulty, q.tags || '', domainInfo.code]
