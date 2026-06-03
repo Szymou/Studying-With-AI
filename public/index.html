@@ -282,6 +282,7 @@
         async function switchDomain(code) {
             const d = domains.find(d => d.code === code);
             if (!d) return;
+            setDomainUI(true);
             currentDomain = d;
             document.getElementById('currentDomainTitle').textContent = (d.icon || '📚') + ' ' + d.name + ' 学习';
             renderSidebar();
@@ -293,6 +294,12 @@
             } else {
                 loadTab('practice');
             }
+        }
+
+        function setDomainUI(visible) {
+            document.getElementById('currentDomainTitle').style.display = visible ? '' : 'none';
+            document.getElementById('statsBar').style.display = visible ? 'flex' : 'none';
+            document.getElementById('nav').style.display = visible ? '' : 'none';
         }
 
         function renderSidebar() {
@@ -309,9 +316,9 @@
             html += '<div style="margin-top:auto;">';
             html += '<div class="sidebar-item" onclick="showGenerateDomainModal()" style="margin-top:8px;">' +
                 '<span class="icon">✨</span><span>生成新领域</span></div>';
-            html += '<div class="sidebar-item" onclick="loadTab(\'ai-chat\')" style="margin-top:4px;">' +
+            html += '<div class="sidebar-item" onclick="setDomainUI(false);loadTab(\'ai-chat\')" style="margin-top:4px;">' +
                 '<span class="icon">🤖</span><span>AI 咨询</span></div>';
-            html += '<div class="sidebar-item" onclick="loadTab(\'settings\')">' +
+            html += '<div class="sidebar-item" onclick="setDomainUI(false);loadTab(\'settings\')">' +
                 '<span class="icon">⚙️</span><span>设置</span></div>';
             html += '</div>';
             
