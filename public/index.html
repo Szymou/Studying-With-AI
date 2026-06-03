@@ -705,11 +705,13 @@
             };
             voiceSel.onchange = saveVoice;
             if (engine === 'browser') {
-                const voices = window.speechSynthesis?.getVoices()?.filter(v => v.lang?.startsWith('zh')) || [];
+                const allVoices = window.speechSynthesis?.getVoices() || [];
+                const zhVoices = allVoices.filter(v => v.lang?.startsWith('zh'));
                 const saved = localStorage.getItem('ttsBrowserVoice');
-                voiceSel.innerHTML = '<option value="">默认</option>' + voices.map((v, i) =>
-                    '<option value="' + i + '"' + (saved === String(i) ? ' selected' : '') + '>' + v.name + '</option>'
-                ).join('');
+                voiceSel.innerHTML = '<option value="">默认</option>' + zhVoices.map((v) => {
+                    const origIdx = allVoices.indexOf(v);
+                    return '<option value="' + origIdx + '"' + (saved === String(origIdx) ? ' selected' : '') + '>' + v.name + '</option>';
+                }).join('');
             } else {
                 const saved = localStorage.getItem('ttsEdgeVoice') || 'zh-CN-XiaoxiaoNeural';
                 voiceSel.innerHTML = EDGE_VOICES.map(v =>
