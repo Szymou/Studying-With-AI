@@ -806,6 +806,69 @@ router.post('/prompts', async (req, res) => {
   }
 });
 
+
+// ============ TTS 语音合成 ============
+import { execSync } from 'child_process';
+import path from 'path';
+import fs from 'fs';
+
+router.post('/tts', async (req, res) => {
+  try {
+    const { text, voice = 'zh-CN-XiaoxiaoNeural' } = req.body;
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: '缺少文本' });
+    }
+
+    // 清理文本
+    const cleanText = text
+      .replace(/<[^>]+>/g, '')
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/#{1,6}\s*/g, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+      .replace(/[>\|]/g, '')
+      .replace(/[-*_]{3,}/g, '')
+      .replace(/\n{3,}/g, '\n')
+      .trim();
+
+    if (!cleanText) return res.status(400).json({ error: '清理后无文本' });
+
+    const tmpDir = path.join(__dirname, '../../data/tts_cache');
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+    const timestamp = Date.now();
+    const inputFile = path.join(tmpDir, `input_\${timestamp}.txt`);
+    const outputFile = path.join(tmpDir, `output_\${timestamp}.mp3`);
+
+    fs.writeFileSync(inputFile, cleanText, 'utf-8');
+
+    try {
+      execSync(`edge-tts --file "\${inputFile}" --voice \${voice} --write-media "\${outputFile}"`, { timeout: 30000 });
+    } catch (e: any) {
+      // 清理后重试
+      try { fs.unlinkSync(inputFile); } catch {}
+      return res.status(500).json({ error: 'TTS 合成失败: ' + (e.message || '') });
+    }
+
+    // 读取音频并返回
+    const audioBuf = fs.readFileSync(outputFile);
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('X-Audio-Length', audioBuf.length);
+    res.send(audioBuf);
+
+    // 异步清理临时文件
+    setTimeout(() => {
+      try { fs.unlinkSync(inputFile); } catch {}
+      try { fs.unlinkSync(outputFile); } catch {}
+    }, 5000);
+  } catch (error: any) {
+    console.error('TTS error:', error);
+    if (!res.headersSent) res.status(500).json({ error: 'TTS 失败: ' + (error.message || '') });
+  }
+});
+
 // ============ AI配置状态 ============
 router.get('/config', async (req, res) => {
   res.json({

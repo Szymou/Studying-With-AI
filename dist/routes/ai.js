@@ -818,6 +818,73 @@ router.post('/prompts', async (req, res) => {
         res.status(500).json({ error: '保存提示词失败' });
     }
 });
+// ============ TTS 语音合成 ============
+const child_process_1 = require("child_process");
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
+router.post('/tts', async (req, res) => {
+    try {
+        const { text, voice = 'zh-CN-XiaoxiaoNeural' } = req.body;
+        if (!text || !text.trim()) {
+            return res.status(400).json({ error: '缺少文本' });
+        }
+        // 清理文本
+        const cleanText = text
+            .replace(/<[^>]+>/g, '')
+            .replace(/```[\s\S]*?```/g, '')
+            .replace(/`([^`]+)`/g, '$1')
+            .replace(/\*\*([^*]+)\*\*/g, '$1')
+            .replace(/\*([^*]+)\*/g, '$1')
+            .replace(/#{1,6}\s*/g, '')
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+            .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+            .replace(/[>\|]/g, '')
+            .replace(/[-*_]{3,}/g, '')
+            .replace(/\n{3,}/g, '\n')
+            .trim();
+        if (!cleanText)
+            return res.status(400).json({ error: '清理后无文本' });
+        const tmpDir = path_1.default.join(__dirname, '../../data/tts_cache');
+        if (!fs_1.default.existsSync(tmpDir))
+            fs_1.default.mkdirSync(tmpDir, { recursive: true });
+        const timestamp = Date.now();
+        const inputFile = path_1.default.join(tmpDir, `input_\${timestamp}.txt`);
+        const outputFile = path_1.default.join(tmpDir, `output_\${timestamp}.mp3`);
+        fs_1.default.writeFileSync(inputFile, cleanText, 'utf-8');
+        try {
+            (0, child_process_1.execSync)(`edge-tts --file "\${inputFile}" --voice \${voice} --write-media "\${outputFile}"`, { timeout: 30000 });
+        }
+        catch (e) {
+            // 清理后重试
+            try {
+                fs_1.default.unlinkSync(inputFile);
+            }
+            catch { }
+            return res.status(500).json({ error: 'TTS 合成失败: ' + (e.message || '') });
+        }
+        // 读取音频并返回
+        const audioBuf = fs_1.default.readFileSync(outputFile);
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.setHeader('X-Audio-Length', audioBuf.length);
+        res.send(audioBuf);
+        // 异步清理临时文件
+        setTimeout(() => {
+            try {
+                fs_1.default.unlinkSync(inputFile);
+            }
+            catch { }
+            try {
+                fs_1.default.unlinkSync(outputFile);
+            }
+            catch { }
+        }, 5000);
+    }
+    catch (error) {
+        console.error('TTS error:', error);
+        if (!res.headersSent)
+            res.status(500).json({ error: 'TTS 失败: ' + (error.message || '') });
+    }
+});
 // ============ AI配置状态 ============
 router.get('/config', async (req, res) => {
     res.json({

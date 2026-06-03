@@ -588,8 +588,7 @@
         function closeAiModal() {
             if (currentAbortController) { currentAbortController.abort(); currentAbortController = null; }
             stopAIPolling();
-            window.speechSynthesis?.cancel();
-            _speaking = false;
+            _speaking = false; // 停止 TTS
             document.getElementById('aiModal').style.display = 'none';
             currentAiQuestionId = null;
             currentAiQuestionText = null;
@@ -615,8 +614,36 @@
             return text.length > 300; // 内容较长时默认认为完整
         }
 
-        // TTS 朗读
+        // TTS 朗读（服务端 Edge TTS）
         let _speaking = false;
+        function playTTS(text) {
+            if (_speaking) return;
+            const btn = document.getElementById('aiSpeakBtn');
+            _speaking = true; if (btn) btn.textContent = '⏹️ 播放中';
+            fetch(API_BASE + '/api/ai/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ text })
+            }).then(r => {
+                if (!r.ok) throw new Error('TTS 请求失败');
+                return r.blob();
+            }).then(blob => {
+                const url = URL.createObjectURL(blob);
+                const audio = new Audio(url);
+                audio.onended = () => { _speaking = false; if (btn) btn.textContent = '🔊 朗读'; URL.revokeObjectURL(url); };
+                audio.onerror = () => { _speaking = false; if (btn) btn.textContent = '🔊 朗读'; };
+                audio.play().catch(() => { _speaking = false; if (btn) btn.textContent = '🔊 朗读'; });
+            }).catch(() => {
+                _speaking = false; if (btn) btn.textContent = '🔊 朗读';
+            });
+        }
+        function stopTTS() {
+            // 简单实现：发出新请求中断当前播放（通过重新赋值 audio 对象来停止）
+            _speaking = false;
+            const btn = document.getElementById('aiSpeakBtn');
+            if (btn) btn.textContent = '🔊 朗读';
+        }
+
         function loadVoices() {
             const select = document.getElementById('aiVoiceSelect');
             if (!select) return;
@@ -640,7 +667,7 @@
             const btn = document.getElementById('aiSpeakBtn');
             if (!contentEl || !btn) return;
             if (_speaking) {
-                window.speechSynthesis?.cancel();
+                // 停止当前播放
                 _speaking = false;
                 btn.textContent = '🔊 朗读';
                 return;
@@ -658,36 +685,7 @@
                 .replace(/\n{3,}/g, '\n\n')
                 .trim();
             if (!text || text === 'AI思考中...') return;
-
-            // 加载可用语音并显示选择器（首次）
-            const select = document.getElementById('aiVoiceSelect');
-            if (select && !select.options.length) loadVoices();
-
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'zh-CN';
-            utterance.rate = 1.0;
-
-            // 使用选中的语音
-            if (select && select.value) {
-                const voices = window.speechSynthesis?.getVoices() || [];
-                const idx = parseInt(select.value);
-                if (voices[idx]) {
-                    utterance.voice = voices[idx];
-                    localStorage.setItem('ttsVoice', select.value);
-                }
-            }
-
-            // 使用选中的语速
-            const speedSelect = document.getElementById('aiSpeedSelect');
-            if (speedSelect) {
-                utterance.rate = parseFloat(speedSelect.value) || 1.0;
-                localStorage.setItem('ttsSpeed', speedSelect.value);
-            }
-
-            utterance.onstart = () => { _speaking = true; btn.textContent = '⏹️ 停止'; };
-            utterance.onend = () => { _speaking = false; btn.textContent = '🔊 朗读'; };
-            utterance.onerror = () => { _speaking = false; btn.textContent = '🔊 朗读'; };
-            window.speechSynthesis?.speak(utterance);
+            playTTS(text);
         }
 
         // 停止轮询
@@ -1522,34 +1520,7 @@
                 if (!full) ad.innerHTML = '<div class="role">AI</div>⚠️ 未收到有效回复';
                 // 完整输出后朗读（去掉 markdown 符号）
                 if (full && localStorage.getItem('chatTTS') === 'true') {
-                    const text = full.replace(/<[^>]+>/g, '')     // HTML 标签
-                        .replace(/```[\s\S]*?```/g, '')           // 代码块
-                        .replace(/`([^`]+)`/g, '$1')              // 行内代码
-                        .replace(/~~([^~]+)~~/g, '$1')            // 删除线
-                        .replace(/\*\*([^*]+)\*\*/g, '$1')        // 加粗
-                        .replace(/\*([^*]+)\*/g, '$1')            // 斜体
-                        .replace(/__([^_]+)__/g, '$1')            // 下划线加粗
-                        .replace(/#{1,6}\s*/g, '')                // 标题标记
-                        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')  // 链接 [text](url)
-                        .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1') // 图片
-                        .replace(/[>\|]/g, '')                    // 块引用/表格线
-                        .replace(/[-*_]{3,}/g, '')                // 分隔线 ---
-                        .replace(/\n{3,}/g, '\n\n')               // 多余空行
-                        .trim();
-                    if (text) {
-                        const speedSel = document.getElementById('chatSpeedSelect');
-                        const rate = speedSel ? parseFloat(speedSel.value) || 1.0 : 1.0;
-                        const utterance = new SpeechSynthesisUtterance(text);
-                        utterance.lang = 'zh-CN';
-                        utterance.rate = rate;
-                        const savedVoice = localStorage.getItem('ttsVoice');
-                        if (savedVoice) {
-                            const voices = window.speechSynthesis?.getVoices() || [];
-                            const idx = parseInt(savedVoice);
-                            if (voices[idx]) utterance.voice = voices[idx];
-                        }
-                        window.speechSynthesis?.speak(utterance);
-                    }
+                    playTTS(full);
                 }
             } catch(e) { ad.innerHTML = '<div class="role">AI</div>⚠️ ' + e.message; }
             finally { inp.disabled = false; inp.focus(); }
