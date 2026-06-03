@@ -245,6 +245,16 @@
         async function loadDomains() {
             try {
                 domains = await api('GET', '/api/domains');
+                // 从 localStorage 恢复排序
+                const savedOrder = localStorage.getItem('domainOrder');
+                if (savedOrder) {
+                    try {
+                        const order = JSON.parse(savedOrder);
+                        if (Array.isArray(order)) {
+                            domains.sort((a, b) => order.indexOf(a.code) - order.indexOf(b.code));
+                        }
+                    } catch(e) {}
+                }
                 renderSidebar();
                 const d = domains.find(d => d.code === currentDomain.code);
                 if (d) currentDomain = d;
@@ -323,13 +333,14 @@
             if (fromIdx === -1 || toIdx === -1) return;
             const [moved] = domains.splice(fromIdx, 1);
             domains.splice(toIdx, 0, moved);
+            // 保存到 localStorage 备份（页面刷新后 loadDomains 会恢复）
+            localStorage.setItem('domainOrder', JSON.stringify(domains.map(d => d.code)));
             renderSidebar();
-            // 持久化到后端
+            // 持久化到后端（静默，失败不影响体验）
             try {
                 await api('PUT', '/api/domains/reorder', { order: domains.map(d => d.code) });
             } catch(e) {
-                console.error('保存排序失败', e);
-                toast('排序保存失败', '⚠️');
+                console.warn('后端排序保存失败，已使用 localStorage 备份', e);
             }
         });
         document.getElementById('sidebar').addEventListener('dragend', (e) => {
