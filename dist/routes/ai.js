@@ -852,7 +852,10 @@ router.post('/tts', async (req, res) => {
         const outputFile = path_1.default.join(tmpDir, `output_\${timestamp}.mp3`);
         fs_1.default.writeFileSync(inputFile, cleanText, 'utf-8');
         try {
-            (0, child_process_1.execSync)(`edge-tts --file "\${inputFile}" --voice \${voice} --write-media "\${outputFile}"`, { timeout: 30000 });
+            (0, child_process_1.execSync)(`edge-tts --file "${inputFile}" --voice ${voice} --write-media "${outputFile}"`, {
+                timeout: 30000,
+                env: { ...process.env, PATH: process.env.PATH + ':/home/szymou/.local/bin' }
+            });
         }
         catch (e) {
             // 清理后重试

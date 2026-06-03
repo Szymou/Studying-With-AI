@@ -845,7 +845,10 @@ router.post('/tts', async (req, res) => {
     fs.writeFileSync(inputFile, cleanText, 'utf-8');
 
     try {
-      execSync(`edge-tts --file "\${inputFile}" --voice \${voice} --write-media "\${outputFile}"`, { timeout: 30000 });
+      execSync(`edge-tts --file "${inputFile}" --voice ${voice} --write-media "${outputFile}"`, {
+        timeout: 30000,
+        env: { ...process.env, PATH: process.env.PATH + ':/home/szymou/.local/bin' }
+      });
     } catch (e: any) {
       // 清理后重试
       try { fs.unlinkSync(inputFile); } catch {}
