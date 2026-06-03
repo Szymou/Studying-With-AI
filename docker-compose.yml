@@ -13,7 +13,6 @@ services:
       - AI_API_KEY=${AI_API_KEY:-}
     volumes:
       - ./data:/app/data
-      - ./.env:/app/.env:ro
     restart: unless-stopped
     healthcheck:
       test: curl -f http://localhost:7777/health || exit 1
