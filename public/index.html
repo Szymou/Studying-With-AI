@@ -614,35 +614,105 @@
             return text.length > 300; // 内容较长时默认认为完整
         }
 
-        // TTS 朗读（服务端 Edge TTS）
+        // TTS 朗读（支持浏览器语音 + 服务端 Edge TTS）
         let _speaking = false;
         function playTTS(text) {
             if (_speaking) return;
+            _speaking = true;
+            const engine = localStorage.getItem('ttsEngine') || 'browser';
+            const rate = parseFloat(localStorage.getItem('ttsRate') || '1.0');
             const btn = document.getElementById('aiSpeakBtn');
-            _speaking = true; if (btn) btn.textContent = '⏹️ 播放中';
-            fetch(API_BASE + '/api/ai/tts', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                body: JSON.stringify({ text })
-            }).then(r => {
-                if (!r.ok) throw new Error('TTS 请求失败');
-                return r.blob();
-            }).then(blob => {
-                const url = URL.createObjectURL(blob);
-                const audio = new Audio(url);
-                audio.onended = () => { _speaking = false; if (btn) btn.textContent = '🔊 朗读'; URL.revokeObjectURL(url); };
-                audio.onerror = () => { _speaking = false; if (btn) btn.textContent = '🔊 朗读'; };
-                audio.play().catch(() => { _speaking = false; if (btn) btn.textContent = '🔊 朗读'; });
-            }).catch(() => {
-                _speaking = false; if (btn) btn.textContent = '🔊 朗读';
-            });
+            if (btn) btn.textContent = '⏹️ 播放中';
+
+            if (engine === 'browser') {
+                // 浏览器 SpeechSynthesis
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'zh-CN';
+                utterance.rate = rate;
+                const voiceIdx = localStorage.getItem('ttsBrowserVoice');
+                if (voiceIdx) {
+                    const voices = window.speechSynthesis?.getVoices() || [];
+                    const idx = parseInt(voiceIdx);
+                    if (voices[idx]) utterance.voice = voices[idx];
+                }
+                utterance.onstart = () => {};
+                utterance.onend = () => { _speaking = false; if (btn) btn.textContent = '🔊 朗读'; };
+                utterance.onerror = () => { _speaking = false; if (btn) btn.textContent = '🔊 朗读'; };
+                window.speechSynthesis?.speak(utterance);
+            } else {
+                // 服务端 Edge TTS
+                const voice = localStorage.getItem('ttsEdgeVoice') || 'zh-CN-XiaoxiaoNeural';
+                fetch(API_BASE + '/api/ai/tts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ text, voice })
+                }).then(r => {
+                    if (!r.ok) throw new Error('TTS 请求失败');
+                    return r.blob();
+                }).then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    const audio = new Audio(url);
+                    audio.playbackRate = rate;
+                    audio.onended = () => { _speaking = false; if (btn) btn.textContent = '🔊 朗读'; URL.revokeObjectURL(url); };
+                    audio.onerror = () => { _speaking = false; if (btn) btn.textContent = '🔊 朗读'; };
+                    audio.play().catch(() => { _speaking = false; if (btn) btn.textContent = '🔊 朗读'; });
+                }).catch(() => {
+                    _speaking = false; if (btn) btn.textContent = '🔊 朗读';
+                });
+            }
         }
         function stopTTS() {
-            // 简单实现：发出新请求中断当前播放（通过重新赋值 audio 对象来停止）
             _speaking = false;
             const btn = document.getElementById('aiSpeakBtn');
             if (btn) btn.textContent = '🔊 朗读';
         }
+
+        // ---- TTS 设置 ----
+        const EDGE_VOICES = [
+            { id: 'zh-CN-XiaoxiaoNeural', name: 'Xiaoxiao 女声（推荐）' },
+            { id: 'zh-CN-YunxiNeural', name: 'Yunxi 男声' },
+            { id: 'zh-CN-XiaoyiNeural', name: 'Xiaoyi 女声' },
+            { id: 'zh-CN-YunjianNeural', name: 'Yunjian 男声' },
+        ];
+        function initTtsSettings() {
+            const el = document.getElementById('ttsEngine');
+            if (!el) return;
+            el.value = localStorage.getItem('ttsEngine') || 'browser';
+            document.getElementById('ttsRate').value = localStorage.getItem('ttsRate') || '1.0';
+            onTtsEngineChange();
+        }
+        function onTtsEngineChange() {
+            const engine = document.getElementById('ttsEngine').value;
+            const voiceSel = document.getElementById('ttsVoice');
+            localStorage.setItem('ttsEngine', engine);
+            // 自动保存音色
+            const saveVoice = () => {
+                const key = engine === 'browser' ? 'ttsBrowserVoice' : 'ttsEdgeVoice';
+                localStorage.setItem(key, voiceSel.value);
+            };
+            voiceSel.onchange = saveVoice;
+            if (engine === 'browser') {
+                const voices = window.speechSynthesis?.getVoices()?.filter(v => v.lang?.startsWith('zh')) || [];
+                const saved = localStorage.getItem('ttsBrowserVoice');
+                voiceSel.innerHTML = '<option value="">默认</option>' + voices.map((v, i) =>
+                    '<option value="' + i + '"' + (saved === String(i) ? ' selected' : '') + '>' + v.name + '</option>'
+                ).join('');
+            } else {
+                const saved = localStorage.getItem('ttsEdgeVoice') || 'zh-CN-XiaoxiaoNeural';
+                voiceSel.innerHTML = EDGE_VOICES.map(v =>
+                    '<option value="' + v.id + '"' + (saved === v.id ? ' selected' : '') + '>' + v.name + '</option>'
+                ).join('');
+            }
+        }
+        function testTTS() {
+            const rate = parseFloat(document.getElementById('ttsRate').value);
+            localStorage.setItem('ttsRate', document.getElementById('ttsRate').value);
+            playTTS('你好，这是一段测试语音。如果听到声音说明配置正确。');
+        }
+        // 语速变化自动保存
+        document.addEventListener('change', (e) => {
+            if (e.target && e.target.id === 'ttsRate') localStorage.setItem('ttsRate', e.target.value);
+        });
 
         function loadVoices() {
             const select = document.getElementById('aiVoiceSelect');
@@ -1588,6 +1658,29 @@
                     '<button class="btn btn-primary" onclick="savePrompts()" style="margin-top:10px;">💾 保存提示词</button>' +
                     '</div>' +
 
+                    // TTS 配置
+                    '<div style="margin-top:30px;padding:20px;border:1px solid var(--border-color);border-radius:10px;">' +
+                    '<h3 style="margin-bottom:15px;">🔊 语音朗读配置</h3>' +
+                    '<div class="cfg-item"><label>阅读方案</label>' +
+                    '<select id="ttsEngine" onchange="onTtsEngineChange()" style="padding:8px;width:100%;border:1px solid var(--border-color);border-radius:6px;font-size:13px;background:var(--input-bg);color:var(--text-primary);">' +
+                    '<option value="browser">浏览器语音（快、依赖系统）</option>' +
+                    '<option value="edge">服务端 Edge TTS（慢、音质好）</option>' +
+                    '</select></div>' +
+                    '<div class="cfg-item"><label>音色</label>' +
+                    '<select id="ttsVoice" style="padding:8px;width:100%;border:1px solid var(--border-color);border-radius:6px;font-size:13px;background:var(--input-bg);color:var(--text-primary);"></select>' +
+                    '</div>' +
+                    '<div class="cfg-item"><label>语速</label>' +
+                    '<select id="ttsRate" style="padding:8px;width:100%;border:1px solid var(--border-color);border-radius:6px;font-size:13px;background:var(--input-bg);color:var(--text-primary);">' +
+                    '<option value="0.5">0.5x 慢速</option>' +
+                    '<option value="0.8">0.8x</option>' +
+                    '<option value="1.0" selected>1.0x 正常</option>' +
+                    '<option value="1.3">1.3x</option>' +
+                    '<option value="1.5">1.5x 快速</option>' +
+                    '<option value="2.0">2.0x 极速</option>' +
+                    '</select></div>' +
+                    '<button class="btn btn-ai" onclick="testTTS()" style="margin-top:10px;">🔊 试听</button>' +
+                    '</div>' +
+
                     '<div class="btn-group" style="margin-top:15px;">' +
                     '<button class="btn btn-primary" onclick="saveSettings()">💾 保存配置</button>' +
                     '<button class="btn btn-danger" onclick="restartService()">🔄 重启服务</button>' +
@@ -1606,6 +1699,7 @@
                 loadDomainsList();
                 // 加载 AI 提示词
                 loadPrompts();
+                initTtsSettings();
             } catch(e) { c.innerHTML = '<div class="loading">加载失败：' + e.message + '</div>'; }
         }
 
