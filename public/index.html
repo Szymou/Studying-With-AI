@@ -271,6 +271,7 @@
         }
 
         async function switchDomain(code) {
+            stopTTS();
             const d = domains.find(d => d.code === code);
             if (!d) return;
             setDomainUI(true);
@@ -448,6 +449,7 @@
 
         // ---- 标签切换 ----
         async function loadTab(t) {
+            stopTTS();
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
             const m = { practice: loadPractice, history: loadHistory, search: loadSearch, manage: loadManage, favorites: loadFavorites, 'ai-chat': loadAIChat, settings: loadSettings };
             if (m[t]) await m[t]();
@@ -1741,6 +1743,7 @@
 
         // 生成新领域弹窗
         function showGenerateDomainModal() {
+            stopTTS();
             // 创建模态框
             const modalHtml = `
                 <div class="modal" id="generateDomainModal" style="display:flex;" onclick="if(event.target===this)closeGenerateDomainModal()">
