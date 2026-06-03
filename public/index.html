@@ -622,10 +622,12 @@
             if (!select) return;
             const voices = window.speechSynthesis?.getVoices() || [];
             const saved = localStorage.getItem('ttsVoice');
-            select.innerHTML = '<option value="">默认</option>' + voices.map((v, i) =>
-                '<option value="' + i + '"' + (saved === String(i) ? ' selected' : '') + '>' + v.name + ' (' + v.lang + ')' + '</option>'
-            ).join('');
-            select.style.display = voices.length ? '' : 'none';
+            const cnVoices = voices.filter(v => v.lang && v.lang.startsWith('zh'));
+            select.innerHTML = '<option value="">默认</option>' + cnVoices.map((v, i) => {
+                const origIdx = voices.indexOf(v);
+                return '<option value="' + origIdx + '"' + (saved === String(origIdx) ? ' selected' : '') + '>' + v.name + '</option>';
+            }).join('');
+            select.style.display = cnVoices.length ? '' : 'none';
             // 恢复保存的语速
             const speedSelect = document.getElementById('aiSpeedSelect');
             if (speedSelect) {
