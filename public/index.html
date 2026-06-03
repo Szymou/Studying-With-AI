@@ -1497,14 +1497,17 @@
                                 if (first) { ad.innerHTML = '<div class="role">AI</div>'; first = false; }
                                 ad.innerHTML = '<div class="role">AI</div>' + renderMd(full);
                                 msgs.scrollTop = msgs.scrollHeight;
-                                // 即刻朗读增量内容
+                                // 完整句子朗读（按。！？\n 切分，避免逐字卡顿）
                                 if (localStorage.getItem('chatTTS') === 'true') {
                                     const plain = full.replace(/<[^>]+>/g, '');
-                                    const newText = plain.slice(_chatReadOffset);
-                                    if (newText.length > 5) { // 至少 5 个字再读
+                                    const newPart = plain.slice(_chatReadOffset);
+                                    // 找句子结尾
+                                    const splitMatch = newPart.match(/^[^。！？\n]*[。！？\n]/);
+                                    if (splitMatch) {
+                                        const sentence = splitMatch[0];
                                         const speedSel = document.getElementById('chatSpeedSelect');
                                         const rate = speedSel ? parseFloat(speedSel.value) || 1.0 : 1.0;
-                                        const utterance = new SpeechSynthesisUtterance(newText);
+                                        const utterance = new SpeechSynthesisUtterance(sentence);
                                         utterance.lang = 'zh-CN';
                                         utterance.rate = rate;
                                         const savedVoice = localStorage.getItem('ttsVoice');
@@ -1514,7 +1517,7 @@
                                             if (voices[idx]) utterance.voice = voices[idx];
                                         }
                                         window.speechSynthesis?.speak(utterance);
-                                        _chatReadOffset = plain.length;
+                                        _chatReadOffset = plain.length - (newPart.length - sentence.length);
                                     }
                                 }
                             } else if (p.error) {
@@ -1524,6 +1527,25 @@
                     }
                 }
                 if (!full) ad.innerHTML = '<div class="role">AI</div>⚠️ 未收到有效回复';
+                // 流结束，朗读剩余未读内容
+                if (full && localStorage.getItem('chatTTS') === 'true') {
+                    const plain = full.replace(/<[^>]+>/g, '');
+                    const remaining = plain.slice(_chatReadOffset).trim();
+                    if (remaining) {
+                        const speedSel = document.getElementById('chatSpeedSelect');
+                        const rate = speedSel ? parseFloat(speedSel.value) || 1.0 : 1.0;
+                        const utterance = new SpeechSynthesisUtterance(remaining);
+                        utterance.lang = 'zh-CN';
+                        utterance.rate = rate;
+                        const savedVoice = localStorage.getItem('ttsVoice');
+                        if (savedVoice) {
+                            const voices = window.speechSynthesis?.getVoices() || [];
+                            const idx = parseInt(savedVoice);
+                            if (voices[idx]) utterance.voice = voices[idx];
+                        }
+                        window.speechSynthesis?.speak(utterance);
+                    }
+                }
             } catch(e) { ad.innerHTML = '<div class="role">AI</div>⚠️ ' + e.message; }
             finally { inp.disabled = false; inp.focus(); }
         }
