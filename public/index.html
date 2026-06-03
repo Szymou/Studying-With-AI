@@ -1389,6 +1389,7 @@
                 '<div class="form-group"><label>数量（1-20）</label><input id="genCount" value="5" style="width:100px;"></div>' +
                 '<div class="btn-group">' +
                 '<button class="btn btn-ai" onclick="doAIGenerate()">✨ 生成</button>' +
+                '<button class="btn btn-success" onclick="doAIAutoExpand()">📈 自动扩充</button>' +
                 '<button class="btn" onclick="this.parentElement.parentElement.remove()">取消</button></div>' +
                 '<div id="genResult" style="margin-top:10px;"></div>';
             ml.parentElement.insertBefore(form, ml);
@@ -1464,6 +1465,83 @@
                 res.innerHTML = '<div style="color:#e53e3e;">❌ 生成失败：' + e.message + '</div>';
             } finally {
                 _generating = false;
+                const genBtn = document.querySelector('#aiGenForm .btn-ai');
+                if (genBtn) genBtn.disabled = false;
+            }
+        }
+
+        // ---- AI 自动扩充题目 ----
+        async function doAIAutoExpand() {
+            if (_generating) return;
+            _generating = true;
+            const btn = document.querySelector('#aiGenForm .btn-success');
+            if (btn) btn.disabled = true;
+            const res = document.getElementById('genResult');
+            res.innerHTML = '<span class="loading">📊 获取当前领域分类...</span>';
+
+            try {
+                // 获取当前领域所有题目
+                const allQs = await api('GET', '/api/questions?limit=500&domain=' + encodeURIComponent(currentDomain.code));
+                // 提取分类（至少出现 2 次以上的分类才考虑，去掉 "自定义" 类）
+                const catCount = {};
+                for (const q of allQs || []) {
+                    if (q.category && q.category !== '自定义') catCount[q.category] = (catCount[q.category] || 0) + 1;
+                }
+                const categories = Object.keys(catCount).sort((a, b) => catCount[b] - catCount[a]);
+                if (!categories.length) {
+                    res.innerHTML = '<div style="color:#ed8936;">⚠️ 当前领域暂无有效分类，请先添加题目</div>';
+                    _generating = false; if (btn) btn.disabled = false; return;
+                }
+
+                // 取前 10 个分类
+                const targets = categories.slice(0, 10);
+                let totalSaved = 0, totalSkipped = 0;
+
+                for (let i = 0; i < targets.length; i++) {
+                    const cat = targets[i];
+                    res.innerHTML = '<span class="loading">📈 正在扩充 <strong>' + cat + '</strong> (' + (i + 1) + '/' + targets.length + ')...</span>';
+
+                    const r = await fetch(API_BASE + '/api/ai/generate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({ topic: cat, count: 3, saveToCustom: true, tech_domain: currentDomain.code })
+                    });
+                    if (!r.ok) continue;
+
+                    const reader = r.body.getReader();
+                    const dec = new TextDecoder();
+                    let buf = '';
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        buf += dec.decode(value, { stream: true });
+                        for (const ln of buf.split('\n')) {
+                            const s = ln.trim();
+                            if (!s.startsWith('data: ')) continue;
+                            const d = s.slice(6).trim();
+                            if (d === '[DONE]') continue;
+                            try {
+                                const p = JSON.parse(d);
+                                if (p.type === 'done' && p.parsed) {
+                                    totalSaved += p.saved || 0;
+                                    totalSkipped += p.skipped || 0;
+                                }
+                            } catch(e) {}
+                        }
+                        buf = '';
+                    }
+                }
+
+                res.innerHTML = '<div style="color:#48bb78;">✅ 扩充完成！保存 ' + totalSaved + ' 题' +
+                    (totalSkipped ? '（跳过 ' + totalSkipped + ' 题重复）' : '') +
+                    '</div><div class="btn-group" style="margin-top:10px;"><button class="btn btn-primary" onclick="document.getElementById(\'aiGenForm\')?.remove();loadManage()">✅ 关闭并刷新</button></div>';
+                toast('自动扩充完成：保存 ' + totalSaved + ' 题', '📈');
+            } catch(e) {
+                res.innerHTML = '<div style="color:#e53e3e;">❌ 扩充失败：' + e.message + '</div>';
+            } finally {
+                _generating = false;
+                const btn2 = document.querySelector('#aiGenForm .btn-success');
+                if (btn2) btn2.disabled = false;
                 const genBtn = document.querySelector('#aiGenForm .btn-ai');
                 if (genBtn) genBtn.disabled = false;
             }
