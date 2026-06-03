@@ -37,9 +37,7 @@
 
 | 扩充题目 | AI 咨询 |
 |:---:|:---:|
-</p>
-
-<p align="center">
+| ![扩充题目](img/newSkilled.png) | ![AI咨询](img/discussAI.png) |
   🧠 AI 生题 · 📚 自定义领域 · 🎯 智能复习 · 🔄 交错练习 · 🗣️ 语音朗读
 </p>
 
