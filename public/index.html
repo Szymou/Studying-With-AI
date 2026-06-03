@@ -1394,10 +1394,15 @@
             ml.parentElement.insertBefore(form, ml);
         }
 
+        let _generating = false;
         async function doAIGenerate() {
+            if (_generating) return; // 防止重复点击
             const topic = document.getElementById('genTopic').value;
             const count = parseInt(document.getElementById('genCount').value) || 5;
             if (!topic) { toast('请输入主题', '⚠️'); return; }
+            _generating = true;
+            const genBtn = document.querySelector('#aiGenForm .btn-ai');
+            if (genBtn) genBtn.disabled = true;
             const res = document.getElementById('genResult');
             res.innerHTML = '<span class="loading">🤖 AI生成中...</span><div id="genStreamContent" style="margin-top:10px;padding:10px;background:var(--surface-secondary);border-radius:8px;white-space:pre-wrap;font-family:monospace;font-size:13px;max-height:300px;overflow-y:auto;"></div>';
             const streamContent = document.getElementById('genStreamContent');
@@ -1457,6 +1462,10 @@
                 }
             } catch (e) {
                 res.innerHTML = '<div style="color:#e53e3e;">❌ 生成失败：' + e.message + '</div>';
+            } finally {
+                _generating = false;
+                const genBtn = document.querySelector('#aiGenForm .btn-ai');
+                if (genBtn) genBtn.disabled = false;
             }
         }
 
