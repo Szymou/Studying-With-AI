@@ -10,11 +10,19 @@ router.use(authMiddleware);
 router.get('/', async (req, res) => {
   try {
     const userId = req.user.userId;
-    const questions = await db.all(`
-      SELECT id, category, subcategory, question, tags, created_at, updated_at
+    const { domain } = req.query;
+    let sql = `
+      SELECT id, category, subcategory, question, tags, tech_domain, created_at, updated_at
       FROM custom_questions WHERE user_id = ?
-      ORDER BY updated_at DESC
-    `, [userId]);
+    `;
+    const params: any[] = [userId];
+    if (domain) {
+      sql += ' AND tech_domain = ?';
+      params.push(domain);
+    }
+    sql += ' ORDER BY updated_at DESC';
+
+    const questions = await db.all(sql, params);
     res.json(questions);
   } catch (error) {
     console.error(error);
@@ -42,16 +50,16 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const userId = req.user.userId;
-    const { question, answer, category, subcategory, tags } = req.body;
+    const { question, answer, category, subcategory, tags, tech_domain } = req.body;
 
     if (!question || !answer) {
       return res.status(400).json({ error: '题目和答案为必填项' });
     }
 
     const result = await db.run(`
-      INSERT INTO custom_questions (user_id, category, subcategory, question, answer, tags)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, [userId, category || '自定义', subcategory || null, question, answer, tags || null]);
+      INSERT INTO custom_questions (user_id, category, subcategory, question, answer, tags, tech_domain)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [userId, category || '自定义', subcategory || null, question, answer, tags || null, tech_domain || 'java']);
 
     res.json({ id: result.lastID, message: '创建成功' });
   } catch (error) {
@@ -74,9 +82,9 @@ router.post('/batch', async (req, res) => {
     for (const q of questions) {
       if (!q.question || !q.answer) continue;
       await db.run(`
-        INSERT INTO custom_questions (user_id, category, subcategory, question, answer, tags)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `, [userId, q.category || '自定义', q.subcategory || null, q.question, q.answer, q.tags || null]);
+        INSERT INTO custom_questions (user_id, category, subcategory, question, answer, tags, tech_domain)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [userId, q.category || '自定义', q.subcategory || null, q.question, q.answer, q.tags || null, q.tech_domain || 'java']);
       inserted++;
     }
 
@@ -91,7 +99,7 @@ router.post('/batch', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const userId = req.user.userId;
-    const { question, answer, category, subcategory, tags } = req.body;
+    const { question, answer, category, subcategory, tags, tech_domain } = req.body;
 
     const existing = await db.get(
       'SELECT id FROM custom_questions WHERE id = ? AND user_id = ?',

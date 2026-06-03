@@ -11,7 +11,7 @@ router.post('/:questionId', async (req, res) => {
   try {
     const userId = req.user.userId;
     const questionId = parseInt(req.params.questionId);
-    const { sourceType } = req.body; // 'system' or 'custom'
+    const { sourceType, tech_domain } = req.body; // 'system' or 'custom'
 
     const existing = await db.get(
       'SELECT id FROM favorites WHERE user_id = ? AND question_id = ? AND source_type = ?',
@@ -23,8 +23,8 @@ router.post('/:questionId', async (req, res) => {
     }
 
     await db.run(
-      'INSERT INTO favorites (user_id, question_id, source_type) VALUES (?, ?, ?)',
-      [userId, questionId, sourceType || 'system']
+      'INSERT INTO favorites (user_id, question_id, source_type, tech_domain) VALUES (?, ?, ?, ?)',
+      [userId, questionId, sourceType || 'system', tech_domain || 'java']
     );
 
     res.json({ message: '收藏成功', questionId });
@@ -56,8 +56,9 @@ router.delete('/:questionId', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const userId = req.user.userId;
-    const favorites = await db.all(`
-      SELECT f.id as fav_id, f.question_id, f.source_type, f.created_at,
+    const { domain } = req.query;
+    let sql = `
+      SELECT f.id as fav_id, f.question_id, f.source_type, f.created_at, f.tech_domain,
              COALESCE(q.question, cq.question) as question,
              COALESCE(q.category, cq.category) as category,
              COALESCE(q.subcategory, cq.subcategory) as subcategory,
@@ -66,9 +67,15 @@ router.get('/', async (req, res) => {
       LEFT JOIN questions q ON f.question_id = q.id AND f.source_type = 'system'
       LEFT JOIN custom_questions cq ON f.question_id = cq.id AND f.source_type = 'custom'
       WHERE f.user_id = ?
-      ORDER BY f.created_at DESC
-    `, [userId]);
+    `;
+    const params: any[] = [userId];
+    if (domain) {
+      sql += ' AND f.tech_domain = ?';
+      params.push(domain);
+    }
+    sql += ' ORDER BY f.created_at DESC';
 
+    const favorites = await db.all(sql, params);
     res.json(favorites.filter(f => f.question));
   } catch (error) {
     console.error(error);

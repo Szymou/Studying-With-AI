@@ -102,15 +102,53 @@ const initDb = async () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
       question_id INTEGER NOT NULL,
-      is_correct BOOLEAN NOT NULL,
+      is_correct BOOLEAN,
+      interaction_type TEXT CHECK(interaction_type IN ('answer', 'ai')),
       answered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(user_id) REFERENCES users(id),
       FOREIGN KEY(question_id) REFERENCES questions(id)
     )
   `);
+    // Add missing columns for existing user_progress table
+    try {
+        await (0, exports.run)(`ALTER TABLE user_progress ADD COLUMN interaction_type TEXT CHECK(interaction_type IN ('answer', 'ai'))`);
+    }
+    catch (e) { }
+    try {
+        await (0, exports.run)(`ALTER TABLE user_progress ADD COLUMN tech_domain TEXT DEFAULT 'java'`);
+    }
+    catch (e) { }
+    try {
+        await (0, exports.run)(`ALTER TABLE questions ADD COLUMN tech_domain TEXT DEFAULT 'java'`);
+    }
+    catch (e) { }
+    try {
+        await (0, exports.run)(`ALTER TABLE custom_questions ADD COLUMN tech_domain TEXT DEFAULT 'java'`);
+    }
+    catch (e) { }
+    try {
+        await (0, exports.run)(`ALTER TABLE favorites ADD COLUMN tech_domain TEXT DEFAULT 'java'`);
+    }
+    catch (e) { }
     const count = await (0, exports.get)('SELECT COUNT(*) as count FROM questions');
     if (!count.count) {
         await seedSampleQuestions();
+    }
+    // 初始化技术领域
+    const domainCount = await (0, exports.get)('SELECT COUNT(*) as cnt FROM tech_domains');
+    if (!domainCount.cnt) {
+        const domains = [
+            ['java', 'Java', '☕', 'Java 企业级开发', 1],
+            ['go', 'Go', '🐹', 'Go 语言开发', 2],
+            ['python', 'Python', '🐍', 'Python 开发', 3],
+            ['frontend', '前端', '⚛️', '前端开发', 4],
+            ['database', '数据库', '🗄️', '数据库技术', 5],
+            ['devops', '运维 & DevOps', '🐳', '运维与 DevOps', 6],
+        ];
+        for (const d of domains) {
+            await (0, exports.run)('INSERT INTO tech_domains (code, name, icon, description, sort_order) VALUES (?, ?, ?, ?, ?)', d);
+        }
+        console.log('✅ 技术领域初始化完成');
     }
 };
 exports.initDb = initDb;

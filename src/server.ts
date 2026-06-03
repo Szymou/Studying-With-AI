@@ -8,6 +8,7 @@ import authRoutes from './routes/auth';
 import questionRoutes from './routes/questions';
 import favoriteRoutes from './routes/favorites';
 import customQuestionRoutes from './routes/custom-questions';
+import domainRoutes from './routes/domains';
 import aiRoutes from './routes/ai';
 
 dotenv.config();
@@ -23,6 +24,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/questions', questionRoutes);
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/custom-questions', customQuestionRoutes);
+app.use('/api/domains', domainRoutes);
 app.use('/api/ai', aiRoutes);
 
 app.get('/health', (req, res) => {
@@ -62,6 +64,14 @@ app.post('/api/config/update', (req, res) => {
   }
 });
 
+// 静态文件服务
+app.use(express.static(path.join(__dirname, '../public')));
+
+// 所有未匹配的路由都返回 index.html，支持 SPA 路由（必须在最后）
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/index.html'));
+});
+
 app.listen(PORT, async () => {
   await db.initDb();
   console.log('Server running on http://localhost:' + PORT);
@@ -83,5 +93,6 @@ app.listen(PORT, async () => {
   console.log('  POST /api/ai/chat/new - 新建AI对话');
   console.log('  POST /api/ai/chat/:id/message - AI咨询');
   console.log('  GET /api/ai/chat/list - 对话列表');
+  console.log('  GET /api/domains - 获取技术领域列表');
   console.log('  POST /api/ai/generate - AI生成题目');
 });

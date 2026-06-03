@@ -13,6 +13,7 @@ const auth_1 = __importDefault(require("./routes/auth"));
 const questions_1 = __importDefault(require("./routes/questions"));
 const favorites_1 = __importDefault(require("./routes/favorites"));
 const custom_questions_1 = __importDefault(require("./routes/custom-questions"));
+const domains_1 = __importDefault(require("./routes/domains"));
 const ai_1 = __importDefault(require("./routes/ai"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -24,6 +25,7 @@ app.use('/api/auth', auth_1.default);
 app.use('/api/questions', questions_1.default);
 app.use('/api/favorites', favorites_1.default);
 app.use('/api/custom-questions', custom_questions_1.default);
+app.use('/api/domains', domains_1.default);
 app.use('/api/ai', ai_1.default);
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -58,6 +60,12 @@ app.post('/api/config/update', (req, res) => {
         res.status(500).json({ error: '配置更新失败: ' + error.message });
     }
 });
+// 静态文件服务
+app.use(express_1.default.static(path_1.default.join(__dirname, '../public')));
+// 所有未匹配的路由都返回 index.html，支持 SPA 路由（必须在最后）
+app.get('*', (req, res) => {
+    res.sendFile(path_1.default.join(__dirname, '../public/index.html'));
+});
 app.listen(PORT, async () => {
     await db_1.default.initDb();
     console.log('Server running on http://localhost:' + PORT);
@@ -79,5 +87,6 @@ app.listen(PORT, async () => {
     console.log('  POST /api/ai/chat/new - 新建AI对话');
     console.log('  POST /api/ai/chat/:id/message - AI咨询');
     console.log('  GET /api/ai/chat/list - 对话列表');
+    console.log('  GET /api/domains - 获取技术领域列表');
     console.log('  POST /api/ai/generate - AI生成题目');
 });
