@@ -1513,7 +1513,7 @@
         function showGenerateDomainModal() {
             // 创建模态框
             const modalHtml = `
-                <div class="modal" id="generateDomainModal" style="display:flex;">
+                <div class="modal" id="generateDomainModal" style="display:flex;" onclick="if(event.target===this)closeGenerateDomainModal()">
                     <div class="modal-content" style="max-width:600px;">
                         <h2>✨ 生成新领域</h2>
                         <div class="form-group">
@@ -1550,6 +1550,10 @@
                 </div>
             `;
             document.body.insertAdjacentHTML('beforeend', modalHtml);
+            // ESC 键关闭
+            document.addEventListener('keydown', _escHandler = (e) => {
+                if (e.key === 'Escape') closeGenerateDomainModal();
+            });
         }
         
         async function aiSuggestDomain() {
@@ -1635,6 +1639,10 @@
         function closeGenerateDomainModal() {
             const modal = document.getElementById('generateDomainModal');
             if (modal) modal.remove();
+            if (window._escHandler) {
+                document.removeEventListener('keydown', window._escHandler);
+                delete window._escHandler;
+            }
         }
 
         async function generateNewDomain() {
