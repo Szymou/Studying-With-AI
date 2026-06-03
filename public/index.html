@@ -1384,8 +1384,17 @@
             if (document.getElementById('aiGenForm')) return;
             const ml = document.getElementById('mList');
             const form = document.createElement('div'); form.id = 'aiGenForm'; form.className = 'question-card';
+            // 加载分类
+            api('GET', '/api/questions?limit=500&domain=' + encodeURIComponent(currentDomain.code)).then(qs => {
+                const cats = [...new Set((qs||[]).map(q => q.category).filter(Boolean))].sort();
+                const sel = document.getElementById('genCat');
+                if (sel) sel.innerHTML = '<option value="">— 选择分类（可选）—</option>' +
+                    cats.map(c => '<option value="' + c + '">' + c + '</option>').join('') +
+                    '<option value="__custom__">✏️ 自定义主题</option>';
+            }).catch(() => {});
             form.innerHTML = '<h3>🤖 AI生成题目</h3>' +
-                '<div class="form-group"><label>主题（必填，如：ConcurrentHashMap、Spring事务）</label><input id="genTopic" placeholder="例如：JVM垃圾回收"></div>' +
+                '<div class="form-group"><label>分类（可选）</label><select id="genCat" onchange="onGenCatChange()" style="padding:8px;width:100%;border:1px solid var(--border-color);border-radius:6px;font-size:13px;background:var(--input-bg);color:var(--text-primary);"><option value="">加载中...</option></select></div>' +
+                '<div class="form-group" id="genCustomGroup" style="display:none;"><label>自定义主题</label><input id="genTopic" placeholder="例如：JVM垃圾回收" style="width:100%;"></div>' +
                 '<div class="form-group"><label>数量（1-20）</label><input id="genCount" value="5" style="width:100px;"></div>' +
                 '<div class="btn-group">' +
                 '<button class="btn btn-ai" onclick="doAIGenerate()">✨ 生成</button>' +
@@ -1395,12 +1404,19 @@
             ml.parentElement.insertBefore(form, ml);
         }
 
+        function onGenCatChange() {
+            const v = document.getElementById('genCat').value;
+            document.getElementById('genCustomGroup').style.display = v === '__custom__' ? '' : 'none';
+        }
+
         let _generating = false;
         async function doAIGenerate() {
-            if (_generating) return; // 防止重复点击
-            const topic = document.getElementById('genTopic').value;
+            if (_generating) return;
+            const cat = document.getElementById('genCat').value;
+            const custom = document.getElementById('genTopic')?.value || '';
+            const topic = cat === '__custom__' ? custom : (cat || custom);
+            if (!topic) { toast('请选择分类或输入自定义主题', '⚠️'); return; }
             const count = parseInt(document.getElementById('genCount').value) || 5;
-            if (!topic) { toast('请输入主题', '⚠️'); return; }
             _generating = true;
             const genBtn = document.querySelector('#aiGenForm .btn-ai');
             if (genBtn) genBtn.disabled = true;
