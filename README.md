@@ -4,6 +4,22 @@
 
 **AI 驱动的面试学习系统 — 智能刷题 · 间隔重复 · 语音朗读**
 
+| 首页 | AI 助手 |
+|:---:|:---:|
+| ![首页](img/index.png) | ![AI助手](img/indexAI.png) |
+
+| 练习页面 | 管理题目 |
+|:---:|:---:|
+| ![练习页](img/studyPage.png) | ![管理题目](img/manageQ&A.png) |
+
+| 收藏功能 | 生成新领域 |
+|:---:|:---:|
+| ![收藏](img/favor.png) | ![生成新领域](img/newSkill.png) |
+
+| 扩充题目 | AI 咨询 |
+|:---:|:---:|
+| ![扩充题目](img/newSkilled.png) | ![AI咨询](img/discussAI.png) |
+
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)](https://www.typescriptlang.org/)
