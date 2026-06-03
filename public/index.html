@@ -645,7 +645,18 @@
                 btn.textContent = '🔊 朗读';
                 return;
             }
-            const text = contentEl.textContent || contentEl.innerText || '';
+            const text = (contentEl.textContent || contentEl.innerText || '')
+                .replace(/```[\s\S]*?```/g, '')
+                .replace(/`([^`]+)`/g, '$1')
+                .replace(/\*\*([^*]+)\*\*/g, '$1')
+                .replace(/\*([^*]+)\*/g, '$1')
+                .replace(/#{1,6}\s*/g, '')
+                .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+                .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+                .replace(/[>\|]/g, '')
+                .replace(/[-*_]{3,}/g, '')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
             if (!text || text === 'AI思考中...') return;
 
             // 加载可用语音并显示选择器（首次）
@@ -1497,28 +1508,10 @@
                                 if (first) { ad.innerHTML = '<div class="role">AI</div>'; first = false; }
                                 ad.innerHTML = '<div class="role">AI</div>' + renderMd(full);
                                 msgs.scrollTop = msgs.scrollHeight;
-                                // 完整句子朗读（按。！？\n 切分，避免逐字卡顿）
+                                // 朗读（流式标记偏移，等完整输出后再读）
                                 if (localStorage.getItem('chatTTS') === 'true') {
                                     const plain = full.replace(/<[^>]+>/g, '');
-                                    const newPart = plain.slice(_chatReadOffset);
-                                    // 找句子结尾
-                                    const splitMatch = newPart.match(/^[^。！？\n]*[。！？\n]/);
-                                    if (splitMatch) {
-                                        const sentence = splitMatch[0];
-                                        const speedSel = document.getElementById('chatSpeedSelect');
-                                        const rate = speedSel ? parseFloat(speedSel.value) || 1.0 : 1.0;
-                                        const utterance = new SpeechSynthesisUtterance(sentence);
-                                        utterance.lang = 'zh-CN';
-                                        utterance.rate = rate;
-                                        const savedVoice = localStorage.getItem('ttsVoice');
-                                        if (savedVoice) {
-                                            const voices = window.speechSynthesis?.getVoices() || [];
-                                            const idx = parseInt(savedVoice);
-                                            if (voices[idx]) utterance.voice = voices[idx];
-                                        }
-                                        window.speechSynthesis?.speak(utterance);
-                                        _chatReadOffset = plain.length - (newPart.length - sentence.length);
-                                    }
+                                    _chatReadOffset = plain.length;
                                 }
                             } else if (p.error) {
                                 ad.innerHTML = '<div class="role">AI</div>⚠️ ' + p.error;
@@ -1527,14 +1520,26 @@
                     }
                 }
                 if (!full) ad.innerHTML = '<div class="role">AI</div>⚠️ 未收到有效回复';
-                // 流结束，朗读剩余未读内容
+                // 完整输出后朗读（去掉 markdown 符号）
                 if (full && localStorage.getItem('chatTTS') === 'true') {
-                    const plain = full.replace(/<[^>]+>/g, '');
-                    const remaining = plain.slice(_chatReadOffset).trim();
-                    if (remaining) {
+                    const text = full.replace(/<[^>]+>/g, '')     // HTML 标签
+                        .replace(/```[\s\S]*?```/g, '')           // 代码块
+                        .replace(/`([^`]+)`/g, '$1')              // 行内代码
+                        .replace(/~~([^~]+)~~/g, '$1')            // 删除线
+                        .replace(/\*\*([^*]+)\*\*/g, '$1')        // 加粗
+                        .replace(/\*([^*]+)\*/g, '$1')            // 斜体
+                        .replace(/__([^_]+)__/g, '$1')            // 下划线加粗
+                        .replace(/#{1,6}\s*/g, '')                // 标题标记
+                        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')  // 链接 [text](url)
+                        .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1') // 图片
+                        .replace(/[>\|]/g, '')                    // 块引用/表格线
+                        .replace(/[-*_]{3,}/g, '')                // 分隔线 ---
+                        .replace(/\n{3,}/g, '\n\n')               // 多余空行
+                        .trim();
+                    if (text) {
                         const speedSel = document.getElementById('chatSpeedSelect');
                         const rate = speedSel ? parseFloat(speedSel.value) || 1.0 : 1.0;
-                        const utterance = new SpeechSynthesisUtterance(remaining);
+                        const utterance = new SpeechSynthesisUtterance(text);
                         utterance.lang = 'zh-CN';
                         utterance.rate = rate;
                         const savedVoice = localStorage.getItem('ttsVoice');
