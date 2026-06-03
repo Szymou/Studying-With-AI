@@ -1,0 +1,37 @@
+services:
+  app:
+    container_name: java-eight-part-system
+    build: .
+    ports:
+      - "7777:7777"
+    environment:
+      - TZ=Asia/Shanghai
+      # 在 Docker 内，deepseek-free-api 通过服务名访问
+      - AI_API_BASE_URL=http://deepseek-free-api:8000/v1
+      - AI_MODEL=deepseek-default
+      - AI_API_KEY=not-needed
+      - JWT_SECRET=Aa123456@
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - deepseek-free-api
+    restart: unless-stopped
+    healthcheck:
+      test: curl -f http://localhost:7777/health || exit 1
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  deepseek-free-api:
+    container_name: deepseek-free-api
+    build:
+      context: ../deepseek-free-api
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ../deepseek-free-api/data:/app/data
