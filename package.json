@@ -1,7 +1,7 @@
 {
-  "name": "java-eight-part-system",
+  "name": "studying-with-ai",
   "version": "1.0.0",
-  "description": "Java 八股文学习系统 (后端API + CLI工具)",
+  "description": "InterviewAI - AI 驱动的面试学习系统",
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
