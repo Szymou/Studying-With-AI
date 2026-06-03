@@ -73,7 +73,7 @@ router.post('/ask', auth_1.authMiddleware, async (req, res) => {
         res.write('data: [DONE]\n\n');
         return res.end();
     }
-    const systemPrompt = '你是一位全栈技术专家，精通多种编程语言和技术栈，教知识会举例子。';
+    const systemPrompt = '你是一个全栈程序员，用大白话讲技术。回答要通俗易懂，多举生活中的例子，像朋友聊天一样自然，别拽术语。';
     const userPrompt = userAnswer
         ? '问题：' + question + '\n用户的回答：' + userAnswer + '\n请评价是否正确，并给出标准答案（含代码示例）。'
         : '问题：' + question + '\n请给出详细准确的答案，包含具体代码示例说明原理。';
@@ -284,7 +284,7 @@ router.post('/chat/:id/message', async (req, res) => {
             return res.status(404).json({ error: '对话不存在' });
         const messages = JSON.parse(convo.messages || '[]');
         messages.push({ role: 'user', content: message });
-        const reply = await callAi([{ role: 'system', content: '你是一位全栈技术专家，精通多种编程语言和技术栈，教知识会举例子。' }, ...messages]);
+        const reply = await callAi([{ role: 'system', content: '你是一个全栈程序员，用大白话讲技术。回答要通俗易懂，多举生活中的例子，像朋友聊天一样自然，别拽术语。' }, ...messages]);
         messages.push({ role: 'assistant', content: reply });
         const firstUserMsg = messages.find((m) => m.role === 'user');
         const title = convo.title || (firstUserMsg ? firstUserMsg.content.substring(0, 30) : '技术咨询');
@@ -320,7 +320,7 @@ router.post('/chat/:id/message/stream', async (req, res) => {
             res.write('data: [DONE]\n\n');
             return res.end();
         }
-        const fullMessages = [{ role: 'system', content: '你是一位全栈技术专家，精通多种编程语言和技术栈，教知识会举例子。' }, ...messages];
+        const fullMessages = [{ role: 'system', content: '你是一个全栈程序员，用大白话讲技术。回答要通俗易懂，多举生活中的例子，像朋友聊天一样自然，别拽术语。' }, ...messages];
         let buffer = '';
         let fullReply = '';
         const response = await axios_1.default.post(AI_BASE_URL + '/chat/completions', { model: AI_MODEL, messages: fullMessages, temperature: 0.7, stream: true }, { headers: { 'Authorization': 'Bearer ' + AI_API_KEY, 'Content-Type': 'application/json' }, responseType: 'stream', timeout: 30000 });
@@ -409,7 +409,7 @@ router.post('/generate', async (req, res) => {
         // 从数据库中获取领域名称，避免硬编码
         const domainRow = tech_domain ? await db_1.default.get('SELECT name FROM tech_domains WHERE code = ?', [tech_domain]) : null;
         const domainName = domainRow ? domainRow.name : 'Java';
-        const prompt = '你是一位' + domainName + '技术面试题专家。请生成' + finalCount + '道关于"' + topic + '"的' + domainName + '面试题。\n\n要求：\n1. 以严格JSON数组格式返回，不要包含任何其他文字说明\n2. 格式：[{"question":"问题","answer":"答案"}]\n3. 题目要有实际价值，贴近面试常见场景\n4. 答案简洁精炼，点到即止，不要长篇大论';
+        const prompt = '你是一位' + domainName + '技术面试题专家。请生成' + finalCount + '道关于"' + topic + '"的' + domainName + '面试题。\n\n要求：\n1. 以严格JSON数组格式返回，不要包含任何其他文字说明\n2. 格式：[{"question":"问题","answer":"答案"}]\n3. 题目要有实际价值，贴近面试常见场景\n4. 答案简洁精炼，点到即止，不要长篇大论\n5. 用大白话回答，像在给同事讲解一样自然';
         // 设置SSE响应头
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
@@ -428,7 +428,7 @@ router.post('/generate', async (req, res) => {
             const response = await axios_1.default.post(AI_BASE_URL + '/chat/completions', {
                 model: AI_MODEL,
                 messages: [
-                    { role: 'system', content: '你是一位专业的' + domainName + '技术面试题库生成器。请严格按照要求只输出JSON数组，不要输出其他任何内容。' },
+                    { role: 'system', content: '你是一位' + domainName + '技术面试出题老师，用大白话写答案。严格按照要求只输出JSON数组，不要其他内容。' },
                     { role: 'user', content: prompt }
                 ],
                 temperature: 0.7,
@@ -607,11 +607,11 @@ router.post('/generate-domain', async (req, res) => {
         let savedCount = 0;
         let fullContent = '';
         try {
-            const questionsPrompt = `你是一位${domainInfo.name}技术面试题专家。请生成${numQuestions}道${domainInfo.name}面试题。\n\n要求：\n1. 覆盖基础、进阶、高级难度\n2. 包含不同分类（基础语法、并发、框架、性能优化等）\n3. 题目符合实际面试场景\n4. 答案简洁精炼，点到即止，不要代码示例\n\n返回JSON数组格式：\n[{"category":"分类名称","subcategory":"子分类（可选）","question":"问题","answer":"答案","difficulty":"easy|medium|hard","tags":"标签（多个用逗号分隔）"}]\n\n只返回JSON数组，不要包含任何其他说明。`;
+            const questionsPrompt = `你是一位${domainInfo.name}技术面试题专家。请生成${numQuestions}道${domainInfo.name}面试题。\n\n要求：\n1. 覆盖基础、进阶、高级难度\n2. 包含不同分类（基础语法、并发、框架、性能优化等）\n3. 题目符合实际面试场景\n4. 答案简洁精炼，点到即止，不要代码示例\n5. 用大白话回答，别太正式，像在聊天一样\n\n返回JSON数组格式：\n[{"category":"分类名称","subcategory":"子分类（可选）","question":"问题","answer":"答案","difficulty":"easy|medium|hard","tags":"标签（多个用逗号分隔）"}]\n\n只返回JSON数组，不要包含任何其他说明。`;
             const response = await axios_1.default.post(AI_BASE_URL + '/chat/completions', {
                 model: AI_MODEL,
                 messages: [
-                    { role: 'system', content: '你是一位专业的' + domainInfo.name + '技术面试题库生成器。请严格按照要求只输出JSON数组，不要输出其他任何内容。' },
+                    { role: 'system', content: '你是一位' + domainInfo.name + '技术面试出题老师，用大白话写答案。严格按照要求只输出JSON数组，不要其他内容。' },
                     { role: 'user', content: questionsPrompt }
                 ],
                 temperature: 0.7,
@@ -745,19 +745,19 @@ router.post('/analyze-error', async (req, res) => {
         if (!AI_API_KEY) {
             return res.json({ type: 'unknown', suggestion: 'AI服务未配置，无法分析错误' });
         }
-        const prompt = `你是一位学习辅导专家。分析以下用户的回答与标准答案的差异。
+        const prompt = `你是一个很有耐心的技术导师。看下面这道题，用户答得怎么样？
 
 问题：${question}
-用户回答：${userAnswer || '（用户未作答）'}
+用户回答：${userAnswer || '（用户没答）'}
 标准答案：${correctAnswer}
 
-请分析用户的错误类型，从以下三类中选择一个返回：
-- 概念不清：用户对核心概念理解有误
-- 记忆混淆：用户把相关知识记混了
-- 细节遗漏：用户理解了大方向但缺少关键细节
+用大白话分析一下用户错在哪，从以下三类选一个：
+- 概念不清：用户压根没理解这个知识点
+- 记忆混淆：用户把几个相似的知识点搞混了
+- 细节遗漏：用户大方向对了，但漏了关键细节
 
 以JSON格式返回，不要包含其他内容：
-{"type":"概念不清|记忆混淆|细节遗漏","suggestion":"一句话改进建议"}`;
+{"type":"概念不清|记忆混淆|细节遗漏","suggestion":"一句大白话的改进建议"}`;
         const response = await callAi([{ role: 'user', content: prompt }]);
         try {
             const cleaned = response.trim()
