@@ -307,6 +307,7 @@
         // ---- 侧边栏拖拉排序 ----
         let _dragCode = null;
         let _recallMode = localStorage.getItem('recallMode') === 'true';
+        let _interleaveMode = localStorage.getItem('interleaveMode') === 'true';
         document.getElementById('sidebar').addEventListener('dragstart', (e) => {
             const item = e.target.closest('.sidebar-item');
             if (!item || !item.draggable) return;
@@ -722,7 +723,8 @@
             if (window._prac && c.innerHTML.trim()) { c.innerHTML = window._prac; document.querySelectorAll('.btn-fav').forEach(b => { const id = b.id.replace('fb-',''); if(id) checkFav(+id, b); }); return; }
             c.innerHTML = '<div class="loading">加载中...</div>';
             try {
-                const allQs = await api('GET', '/api/questions?limit=200&domain=' + encodeURIComponent(currentDomain.code));
+                const domainParam = _interleaveMode ? '' : '&domain=' + encodeURIComponent(currentDomain.code);
+                const allQs = await api('GET', '/api/questions?limit=200' + domainParam);
                 const cats = [...new Set((allQs||[]).map(q => q.category).filter(Boolean))];
                 const selectedCat = document.getElementById('pracCat')?.value || 'all';
                 let qs = allQs || [];
@@ -730,11 +732,13 @@
                 qs = qs.sort(() => Math.random() - 0.5).slice(0, 5);
                 const hideInp = localStorage.getItem('hidePracticeInput') === 'true';
                 const modeLabel = _recallMode ? '🧠 回忆' : '📖 展示';
-                c.innerHTML = '<h2>随机练习 <button class="btn btn-ai" onclick="refreshPractice()" style="float:right;">🔄 刷新题目</button> <button class="btn" onclick="toggleRecallMode()" style="float:right;margin-right:8px;padding:6px 12px;border:1px solid var(--border-color);border-radius:5px;font-size:13px;background:var(--input-bg);color:var(--text-primary);cursor:pointer;">' + modeLabel + '</button> <select id="pracCat" onchange="refreshPractice()" style="float:right;margin-right:8px;padding:6px;border:1px solid var(--border-color);border-radius:5px;font-size:13px;background:var(--input-bg);color:var(--text-primary);"><option value="all">全部分类</option>' +
+                const interLabel = _interleaveMode ? '🌐 全局' : '📚 单领域';
+                c.innerHTML = '<h2>随机练习 <button class="btn btn-ai" onclick="refreshPractice()" style="float:right;">🔄 刷新题目</button> <button class="btn" onclick="toggleInterleaveMode()" style="float:right;margin-right:8px;padding:6px 12px;border:1px solid var(--border-color);border-radius:5px;font-size:13px;background:var(--input-bg);color:var(--text-primary);cursor:pointer;">' + interLabel + '</button> <button class="btn" onclick="toggleRecallMode()" style="float:right;margin-right:8px;padding:6px 12px;border:1px solid var(--border-color);border-radius:5px;font-size:13px;background:var(--input-bg);color:var(--text-primary);cursor:pointer;">' + modeLabel + '</button> <select id="pracCat" onchange="refreshPractice()" style="float:right;margin-right:8px;padding:6px;border:1px solid var(--border-color);border-radius:5px;font-size:13px;background:var(--input-bg);color:var(--text-primary);"><option value="all">全部分类</option>' +
                     cats.map(cat => '<option value="' + cat + '"' + (selectedCat === cat ? ' selected' : '') + '>' + cat + '</option>').join('') + '</select></h2>';
                 for (const q of qs) {
                     const div = document.createElement('div'); div.className = 'question-card';
-                    div.innerHTML = '<div><span class="question-category">' + q.category + (q.subcategory?' - '+q.subcategory:'') + '</span><span class="question-title">' + q.question + '</span></div>' +
+                    const domainTag = _interleaveMode && q.tech_domain ? ' [' + q.tech_domain + ']' : '';
+                    div.innerHTML = '<div><span class="question-category">' + q.category + (q.subcategory?' - '+q.subcategory:'') + domainTag + '</span><span class="question-title">' + q.question + '</span></div>' +
                         (hideInp ? '' : '<input class="answer-input" id="a-' + q.id + '" placeholder="输入你的答案">' +
                         '<div class="btn-group">' +
                         '<button class="btn btn-primary" onclick="submitAns(' + q.id + ')">提交答案</button>') +
@@ -754,7 +758,8 @@
             // 在销毁DOM之前记住选中的分类
             const savedCat = document.getElementById('pracCat')?.value || 'all';
             window._prac = null; document.getElementById('content').innerHTML = '<div class="loading">加载中...</div>';
-            const allQs = await api('GET', '/api/questions?limit=200&domain=' + encodeURIComponent(currentDomain.code));
+            const domainParam = _interleaveMode ? '' : '&domain=' + encodeURIComponent(currentDomain.code);
+            const allQs = await api('GET', '/api/questions?limit=200' + domainParam);
             const cats = [...new Set((allQs||[]).map(q => q.category).filter(Boolean))];
             const selectedCat = savedCat;
             let qs = allQs || [];
@@ -762,12 +767,14 @@
             qs = qs.sort(() => Math.random() - 0.5).slice(0, 5);
             const c = document.getElementById('content');
             const hideInp = localStorage.getItem('hidePracticeInput') === 'true';
-            c.innerHTML = '<h2>随机练习 <button class="btn btn-ai" onclick="refreshPractice()" style="float:right;">🔄 刷新题目</button> <select id="pracCat" onchange="refreshPractice()" style="float:right;margin-right:8px;padding:6px;border:1px solid var(--border-color);border-radius:5px;font-size:13px;background:var(--input-bg);color:var(--text-primary);"><option value="all">全部分类</option>' +
+            const modeLabel = _recallMode ? '🧠 回忆' : '📖 展示';
+            const interLabel = _interleaveMode ? '🌐 全局' : '📚 单领域';
+            c.innerHTML = '<h2>随机练习 <button class="btn btn-ai" onclick="refreshPractice()" style="float:right;">🔄 刷新题目</button> <button class="btn" onclick="toggleInterleaveMode()" style="float:right;margin-right:8px;padding:6px 12px;border:1px solid var(--border-color);border-radius:5px;font-size:13px;background:var(--input-bg);color:var(--text-primary);cursor:pointer;">' + interLabel + '</button> <button class="btn" onclick="toggleRecallMode()" style="float:right;margin-right:8px;padding:6px 12px;border:1px solid var(--border-color);border-radius:5px;font-size:13px;background:var(--input-bg);color:var(--text-primary);cursor:pointer;">' + modeLabel + '</button> <select id="pracCat" onchange="refreshPractice()" style="float:right;margin-right:8px;padding:6px;border:1px solid var(--border-color);border-radius:5px;font-size:13px;background:var(--input-bg);color:var(--text-primary);"><option value="all">全部分类</option>' +
                 cats.map(cat => '<option value="' + cat + '"' + (selectedCat === cat ? ' selected' : '') + '>' + cat + '</option>').join('') + '</select></h2>';
             for (const q of qs) {
                 const div = document.createElement('div'); div.className = 'question-card';
                 div.id = 'qc-' + q.id;
-                div.innerHTML = '<div><span class="question-category">' + q.category + (q.subcategory?' - '+q.subcategory:'') + '</span><span class="question-title">' + q.question + '</span></div>' +
+                div.innerHTML = '<div><span class="question-category">' + q.category + (q.subcategory?' - '+q.subcategory:'') + (_interleaveMode && q.tech_domain ? ' [' + q.tech_domain + ']' : '') + '</span><span class="question-title">' + q.question + '</span></div>' +
                     (_recallMode
                         ? '<div class="btn-group" style="margin-top:8px;"><button class="btn btn-primary" onclick="showAnswer(' + q.id + ')">👁️ 显示答案</button></div>' +
                           '<div class="result" id="r-' + q.id + '" style="display:none;"></div>' +
@@ -797,6 +804,19 @@
                 const r = document.getElementById('r-' + qid);
                 r.className = 'result ' + (d.isCorrect ? 'correct' : 'incorrect');
                 r.innerHTML = d.isCorrect ? '✓ 正确！' : '✗ 错误。标准答案：' + d.correctAnswer;
+                // 答错时触发 AI 错误分析
+                if (!d.isCorrect && d.correctAnswer) {
+                    const questionText = document.querySelector('#qc-' + qid + ' .question-title')?.textContent || '';
+                    api('POST', '/api/ai/analyze-error', { question: questionText, userAnswer: a, correctAnswer: d.correctAnswer })
+                        .then(analysis => {
+                            if (analysis && analysis.type) {
+                                const typeIcons = { '概念不清': '🔍', '记忆混淆': '🌀', '细节遗漏': '⏳' };
+                                r.innerHTML += '<div style="margin-top:8px;padding:8px 10px;background:var(--surface-secondary);border-radius:6px;font-size:13px;">' +
+                                    (typeIcons[analysis.type] || '❓') + ' ' + analysis.type +
+                                    '<br><small style="color:var(--text-secondary);">' + (analysis.suggestion || '') + '</small></div>';
+                            }
+                        }).catch(() => {});
+                }
                 await updateStats();
             } catch(e) { toast('提交失败：' + e.message, '❌'); }
         }
@@ -1182,6 +1202,13 @@
             refreshPractice();
         }
 
+        function toggleInterleaveMode() {
+            _interleaveMode = !_interleaveMode;
+            localStorage.setItem('interleaveMode', _interleaveMode);
+            window._prac = null;
+            refreshPractice();
+        }
+
         function showAnswer(qid, question) {
             const r = document.getElementById('r-' + qid);
             if (!r) return;
@@ -1212,6 +1239,20 @@
                         const emojis = { remembered: '✅', hazy: '⚠️', forgot: '❌' };
                         r.innerHTML = emojis[assessment] + ' 自评：' + labels[assessment] +
                             '<br><small style="color:#718096;">下次复习：' + new Date(d.sm2.nextReviewAt).toLocaleString('zh-CN', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) + '</small>';
+                        // 模糊/忘了时触发 AI 错误分析
+                        if (assessment === 'hazy' || assessment === 'forgot') {
+                            const questionText = document.querySelector('#qc-' + qid + ' .question-title')?.textContent || '';
+                            const answerText = r.querySelector('strong')?.textContent?.replace('参考答案：', '') || '';
+                            api('POST', '/api/ai/analyze-error', { question: questionText, correctAnswer: answerText })
+                                .then(analysis => {
+                                    if (analysis && analysis.type) {
+                                        const typeIcons = { '概念不清': '🔍', '记忆混淆': '🌀', '细节遗漏': '⏳' };
+                                        r.innerHTML += '<div style="margin-top:8px;padding:8px 10px;background:var(--surface-secondary);border-radius:6px;font-size:13px;">' +
+                                            (typeIcons[analysis.type] || '❓') + ' ' + analysis.type +
+                                            '<br><small style="color:var(--text-secondary);">' + (analysis.suggestion || '') + '</small></div>';
+                                    }
+                                }).catch(() => {});
+                        }
                     }
                 }
                 document.getElementById('rb-' + qid)?.remove();

@@ -720,6 +720,51 @@ router.post('/generate-domain', async (req, res) => {
   }
 });
 
+
+// ============ AI错误分析 ============
+router.post('/analyze-error', async (req, res) => {
+  try {
+    const { question, userAnswer, correctAnswer } = req.body;
+    if (!question || !correctAnswer) {
+      return res.status(400).json({ error: '缺少问题或标准答案' });
+    }
+
+    if (!AI_API_KEY) {
+      return res.json({ type: 'unknown', suggestion: 'AI服务未配置，无法分析错误' });
+    }
+
+    const prompt = `你是一位学习辅导专家。分析以下用户的回答与标准答案的差异。
+
+问题：${question}
+用户回答：${userAnswer || '（用户未作答）'}
+标准答案：${correctAnswer}
+
+请分析用户的错误类型，从以下三类中选择一个返回：
+- 概念不清：用户对核心概念理解有误
+- 记忆混淆：用户把相关知识记混了
+- 细节遗漏：用户理解了大方向但缺少关键细节
+
+以JSON格式返回，不要包含其他内容：
+{"type":"概念不清|记忆混淆|细节遗漏","suggestion":"一句话改进建议"}`;
+
+    const response = await callAi([{ role: 'user', content: prompt }]);
+
+    try {
+      const cleaned = response.trim()
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/\s*```$/i, '');
+      const result = JSON.parse(cleaned);
+      return res.json({ type: result.type || 'unknown', suggestion: result.suggestion || '' });
+    } catch {
+      return res.json({ type: 'unknown', suggestion: '无法分析错误类型' });
+    }
+  } catch (error: any) {
+    console.error('Error analysis error:', error);
+    res.status(500).json({ error: '分析失败' });
+  }
+});
+
 // ============ AI配置状态 ============
 router.get('/config', async (req, res) => {
   res.json({
