@@ -1,4 +1,4 @@
-import express from 'express';
+﻿﻿import express from 'express';
 import db from '../db';
 import { authMiddleware } from '../auth';
 
@@ -9,7 +9,7 @@ router.use(authMiddleware);
 router.get('/', async (req, res) => {
   try {
     const { category, subcategory, difficulty, domain, limit = 50, offset = 0 } = req.query;
-    let sql = 'SELECT id, category, subcategory, question, difficulty, tags, tech_domain FROM questions WHERE 1=1';
+    let sql = `SELECT id, category, subcategory, question, difficulty, tags, tech_domain, 'system' as source FROM questions WHERE 1=1`;
     const params: any[] = [];
 
     if (category) {
@@ -29,10 +29,25 @@ router.get('/', async (req, res) => {
       params.push(domain);
     }
 
-    sql += ' ORDER BY id LIMIT ? OFFSET ?';
-    params.push(Number(limit), Number(offset));
+    let cSql = `SELECT id, category, subcategory, question, NULL as difficulty, tags, tech_domain, 'custom' as source FROM custom_questions WHERE 1=1`;
+    const cParams: any[] = [];
+    if (category) {
+      cSql += ' AND category = ?';
+      cParams.push(category);
+    }
+    if (subcategory) {
+      cSql += ' AND subcategory = ?';
+      cParams.push(subcategory);
+    }
+    if (domain) {
+      cSql += ' AND tech_domain = ?';
+      cParams.push(domain);
+    }
 
-    const questions = await db.all(sql, params);
+    const fullSql = `SELECT * FROM (${sql} UNION ALL ${cSql}) ORDER BY id LIMIT ? OFFSET ?`;
+    const allParams = [...params, ...cParams, Number(limit), Number(offset)];
+
+    const questions = await db.all(fullSql, allParams);
     res.json(questions);
   } catch (error) {
     console.error(error);
@@ -44,15 +59,17 @@ router.get('/random/:count', async (req, res) => {
   try {
     const count = Math.min(parseInt(req.params.count) || 10, 50);
     const { domain } = req.query;
-    let sql = 'SELECT id, category, subcategory, question, difficulty, tags, tech_domain FROM questions';
+    let sSql = `SELECT id, category, subcategory, question, difficulty, tags, tech_domain, 'system' as source FROM questions`;
+    let cSql = `SELECT id, category, subcategory, question, NULL as difficulty, tags, tech_domain, 'custom' as source FROM custom_questions`;
     const params: any[] = [];
     if (domain) {
-      sql += ' WHERE tech_domain = ?';
-      params.push(domain);
+      sSql += ` WHERE tech_domain = ?`;
+      cSql += ` WHERE tech_domain = ?`;
+      params.push(domain, domain);
     }
-    sql += ' ORDER BY RANDOM() LIMIT ?';
+    const fullSql = `SELECT * FROM (${sSql} UNION ALL ${cSql}) ORDER BY RANDOM() LIMIT ?`;
     params.push(count);
-    const questions = await db.all(sql, params);
+    const questions = await db.all(fullSql, params);
     res.json(questions);
   } catch (error) {
     console.error(error);
@@ -184,4 +201,23 @@ router.get('/progress/stats', async (req, res) => {
   }
 });
 
+// 删除题目
+router.delete('/:id', async (req, res) => {
+  try {
+    const questionId = parseInt(req.params.id);
+    const question = await db.get('SELECT id FROM questions WHERE id = ?', [questionId]);
+    if (!question) {
+      return res.status(404).json({ error: '题目不存在' });
+    }
+    await db.run('DELETE FROM questions WHERE id = ?', [questionId]);
+    await db.run('DELETE FROM user_progress WHERE question_id = ?', [questionId]);
+    await db.run('DELETE FROM favorites WHERE question_id = ? AND source_type = "system"', [questionId]);
+    res.json({ success: true, message: '题目已删除' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: '删除题目失败' });
+  }
+});
+
 export default router;
+

@@ -1,4 +1,4 @@
-import express from 'express';
+﻿﻿import express from 'express';
 import db from '../db';
 import { authMiddleware } from '../auth';
 import axios from 'axios';
@@ -43,7 +43,7 @@ router.post('/ask', authMiddleware, async (req, res) => {
         return res.end();
     }
 
-    const systemPrompt = '你是一个专家级的Java专家，知识广阔，教知识会举例子。';
+    const systemPrompt = '你是一位全栈技术专家，精通多种编程语言和技术栈，教知识会举例子。';
     const userPrompt = userAnswer
         ? '问题：' + question + '\n用户的回答：' + userAnswer + '\n请评价是否正确，并给出标准答案（含代码示例）。'
         : '问题：' + question + '\n请给出详细准确的答案，包含具体代码示例说明原理。';
@@ -254,11 +254,11 @@ router.post('/chat/:id/message', async (req, res) => {
     const messages = JSON.parse(convo.messages || '[]');
     messages.push({ role: 'user', content: message });
 
-    const reply = await callAi([{ role: 'system', content: '你是一个专家级的Java专家，知识广阔，教知识会举例子。' }, ...messages]);
+    const reply = await callAi([{ role: 'system', content: '你是一位全栈技术专家，精通多种编程语言和技术栈，教知识会举例子。' }, ...messages]);
     messages.push({ role: 'assistant', content: reply });
 
     const firstUserMsg = messages.find((m: any) => m.role === 'user');
-    const title = convo.title || (firstUserMsg ? firstUserMsg.content.substring(0, 30) : 'Java咨询');
+    const title = convo.title || (firstUserMsg ? firstUserMsg.content.substring(0, 30) : '技术咨询');
     await db.run('UPDATE ai_conversations SET messages = ?, title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [JSON.stringify(messages), title, req.params.id]);
 
     res.json({ reply, messages });
@@ -279,7 +279,7 @@ router.post('/chat/:id/message', async (req, res) => {
 
       // ✅ 关键修改 1: 先立即保存用户消息到数据库！
       const firstUserMsg = messages.find((m: any) => m.role === 'user');
-      const title = convo.title || (firstUserMsg ? firstUserMsg.content.substring(0, 30) : 'Java咨询');
+      const title = convo.title || (firstUserMsg ? firstUserMsg.content.substring(0, 30) : '技术咨询');
       await db.run('UPDATE ai_conversations SET messages = ?, title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [JSON.stringify(messages), title, req.params.id]);
 
       // Set SSE headers
@@ -294,7 +294,7 @@ router.post('/chat/:id/message', async (req, res) => {
         return res.end();
       }
 
-      const fullMessages = [{ role: 'system', content: '你是一个专家级的Java专家，知识广阔，教知识会举例子。' }, ...messages];
+      const fullMessages = [{ role: 'system', content: '你是一位全栈技术专家，精通多种编程语言和技术栈，教知识会举例子。' }, ...messages];
 
       let buffer = '';
       let fullReply = '';
@@ -385,8 +385,9 @@ router.post('/generate', async (req, res) => {
     if (!topic) return res.status(400).json({ error: '请指定主题' });
 
     const finalCount = Math.min(Math.max(count, 1), 20);
-    const domainMap: Record<string, string> = { java: 'Java', go: 'Go', python: 'Python', frontend: '前端', database: '数据库', devops: 'DevOps' };
-    const domainName = domainMap[tech_domain || 'java'] || 'Java';
+    // 从数据库中获取领域名称，避免硬编码
+    const domainRow = tech_domain ? await db.get('SELECT name FROM tech_domains WHERE code = ?', [tech_domain]) : null;
+    const domainName = domainRow ? domainRow.name : 'Java';
     const prompt = '你是一位' + domainName + '技术面试题专家。请生成' + finalCount + '道关于"' + topic + '"的' + domainName + '面试题。\n\n要求：\n1. 以严格JSON数组格式返回，不要包含任何其他文字说明\n2. 格式：[{"question":"问题","answer":"答案"}]\n3. 题目要有深度，包含实际开发中的常见问题\n4. 答案要准确详细';
 
     // 设置SSE响应头
@@ -501,19 +502,29 @@ router.post('/generate', async (req, res) => {
   }
 });
 
-// ============ AI生成新领域 ============
+// ============ AI生成新领域（SSE流式） ============
 router.post('/generate-domain', async (req, res) => {
   try {
-    const { description, language, code, icon, numQuestions = 30 } = req.body;
+    const { description, language, code, icon, numQuestions = 5 } = req.body;
     if (!description) {
+      res.setHeader('Content-Type', 'application/json');
       return res.status(400).json({ success: false, message: '请提供领域描述' });
     }
 
     if (!AI_API_KEY) {
+      res.setHeader('Content-Type', 'application/json');
       return res.status(400).json({ success: false, message: 'AI服务未配置' });
     }
 
+    // 设置SSE响应头
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
     // 1. 生成领域基本信息
+    res.write('data: ' + JSON.stringify({ type: 'step', content: '🔍 AI正在分析领域信息...' }) + '\n\n');
+
     const domainPrompt = `你是一位技术教育专家。请根据以下描述生成一个技术领域：\n${description}\n\n要求返回JSON格式：\n{\n  "code": "小写英文字母，唯一标识（如java）",\n  "name": "显示名称（如Java）",\n  "icon": "适合的emoji图标（最好是技术相关）",\n  "description": "该领域的简短描述（50-100字）"\n}\n\n只返回JSON，不要包含任何其他说明。`;
     
     let domainInfo: any;
@@ -534,7 +545,6 @@ router.post('/generate-domain', async (req, res) => {
       };
     }
 
-    // 如果用户提供了参数，使用用户参数
     if (language) domainInfo.name = language;
     if (code) domainInfo.code = code;
     if (icon) domainInfo.icon = icon;
@@ -542,66 +552,129 @@ router.post('/generate-domain', async (req, res) => {
     // 检查领域是否已存在
     const existingDomain = await db.get('SELECT * FROM tech_domains WHERE code = ?', [domainInfo.code]);
     if (existingDomain) {
-      return res.json({ success: false, message: '该领域已存在', domain: existingDomain });
+      res.write('data: ' + JSON.stringify({ type: 'error', content: '该领域已存在: ' + domainInfo.name }) + '\n\n');
+      res.write('data: [DONE]\n\n');
+      return res.end();
     }
 
     // 2. 保存新领域
+    res.write('data: ' + JSON.stringify({ type: 'step', content: '💾 正在保存领域信息...' }) + '\n\n');
+
     await db.run(
-      'INSERT INTO tech_domains (code, name, icon, description, user_id) VALUES (?, ?, ?, ?, ?)',
-      [domainInfo.code, domainInfo.name, domainInfo.icon, domainInfo.description, req.user.userId]
+      'INSERT INTO tech_domains (code, name, icon, description) VALUES (?, ?, ?, ?)',
+      [domainInfo.code, domainInfo.name, domainInfo.icon, domainInfo.description]
     );
 
-    // 3. 生成题目
+    res.write('data: ' + JSON.stringify({ type: 'domain', domain: domainInfo }) + '\n\n');
+
+    // 3. 流式生成题目
+    res.write('data: ' + JSON.stringify({ type: 'step', content: '🤖 AI正在生成' + numQuestions + '道' + domainInfo.name + '面试题...' }) + '\n\n');
+
     let savedCount = 0;
+    let fullContent = '';
+
     try {
       const questionsPrompt = `你是一位${domainInfo.name}技术面试题专家。请生成${numQuestions}道${domainInfo.name}面试题。\n\n要求：\n1. 覆盖基础、进阶、高级难度\n2. 包含不同分类（基础语法、并发、框架、性能优化等）\n3. 题目要有深度，符合实际面试场景\n4. 答案准确详细，尽可能包含代码示例\n\n返回JSON数组格式：\n[{"category":"分类名称","subcategory":"子分类（可选）","question":"问题","answer":"答案","difficulty":"easy|medium|hard","tags":"标签（多个用逗号分隔）"}]\n\n只返回JSON数组，不要包含任何其他说明。`;
 
-      const questionsResponse = await callAi([{ role: 'user', content: questionsPrompt }]);
-      let questions: any[];
-      
-      try {
-        const arrMatch = questionsResponse.match(/\[[\s\S]*\]/);
-        if (arrMatch) {
-          questions = JSON.parse(arrMatch[0]);
-        } else {
-          questions = JSON.parse(questionsResponse);
+      const response = await axios.post(
+        AI_BASE_URL + '/chat/completions',
+        {
+          model: AI_MODEL,
+          messages: [
+            { role: 'system', content: '你是一位专业的' + domainInfo.name + '技术面试题库生成器。请严格按照要求只输出JSON数组，不要输出其他任何内容。' },
+            { role: 'user', content: questionsPrompt }
+          ],
+          temperature: 0.7,
+          stream: true
+        },
+        {
+          headers: { 'Authorization': 'Bearer ' + AI_API_KEY, 'Content-Type': 'application/json' },
+          responseType: 'stream',
+          timeout: 120000
         }
-      } catch (e) {
-        // 解析失败，返回领域但不保存题目
-        return res.json({ 
-          success: true, 
-          domain: domainInfo, 
-          saved: 0, 
-          message: '领域创建成功，但题目解析失败，请手动添加题目'
-        });
-      }
+      );
 
-      // 保存题目
-      for (const q of questions) {
-        if (!q.question || !q.answer) continue;
+      response.data.on('data', (chunk: Buffer) => {
         try {
-          await db.run(
-            'INSERT INTO questions (category, subcategory, question, answer, difficulty, tags, tech_domain) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [q.category || '基础', q.subcategory || '', q.question, q.answer, q.difficulty || 'medium', q.tags || '', domainInfo.code]
-          );
-          savedCount++;
+          const text = chunk.toString();
+          const lines = text.split('\n');
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('data: ')) continue;
+            const dataStr = trimmed.slice(6).trim();
+            if (dataStr === '[DONE]') continue;
+            try {
+              const parsed = JSON.parse(dataStr);
+              const content = parsed.choices?.[0]?.delta?.content || parsed.choices?.[0]?.text || '';
+              if (content) {
+                fullContent += content;
+                res.write('data: ' + JSON.stringify({ type: 'stream', content }) + '\n\n');
+              }
+            } catch (e) {}
+          }
+        } catch (e) {}
+      });
+
+      response.data.on('end', async () => {
+        // 解析并保存题目
+        try {
+          let cleaned = fullContent.trim()
+            .replace(/^```json\s*/i, '')
+            .replace(/^```\s*/i, '')
+            .replace(/\s*```$/i, '')
+            .replace(/[\u201c\u201d]/g, '"')
+            .replace(/[\u2018\u2019]/g, "'");
+          const arrStart = cleaned.indexOf('[');
+          const arrEnd = cleaned.lastIndexOf(']');
+          if (arrStart !== -1 && arrEnd > arrStart) {
+            cleaned = cleaned.substring(arrStart, arrEnd + 1);
+          }
+          const questions = JSON.parse(cleaned);
+          if (!Array.isArray(questions)) throw new Error('not array');
+
+          res.write('data: ' + JSON.stringify({ type: 'step', content: '💾 正在保存题目到数据库...' }) + '\n\n');
+
+          for (const q of questions) {
+            if (!q.question || !q.answer) continue;
+            try {
+              const diffMap: Record<string, string> = { 'easy': 'easy', 'medium': 'medium', 'hard': 'hard', 'beginner': 'easy', 'elementary': 'easy', 'intermediate': 'medium', 'advanced': 'hard', 'expert': 'hard' };
+              const difficulty = diffMap[(q.difficulty || 'medium').toLowerCase().trim()] || 'medium';
+              await db.run(
+                'INSERT INTO questions (category, subcategory, question, answer, difficulty, tags, tech_domain) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [q.category || '基础', q.subcategory || '', q.question, q.answer, difficulty, q.tags || '', domainInfo.code]
+              );
+              savedCount++;
+            } catch (e) {
+              console.error('Insert question error:', e);
+            }
+          }
+
+          res.write('data: ' + JSON.stringify({ type: 'done', domain: domainInfo, saved: savedCount }) + '\n\n');
         } catch (e) {
-          console.error('Insert question error:', e);
+          res.write('data: ' + JSON.stringify({ type: 'done', domain: domainInfo, saved: 0, parseError: true, raw: fullContent }) + '\n\n');
         }
-      }
+        res.write('data: [DONE]\n\n');
+        res.end();
+      });
+
+      response.data.on('error', (err: any) => {
+        console.error('Stream error:', err);
+        res.write('data: ' + JSON.stringify({ type: 'done', domain: domainInfo, saved: 0, error: '流式生成中断' }) + '\n\n');
+        res.write('data: [DONE]\n\n');
+        res.end();
+      });
     } catch (e) {
       console.error('Generate questions error:', e);
+      res.write('data: ' + JSON.stringify({ type: 'done', domain: domainInfo, saved: 0, error: '生成题目失败' }) + '\n\n');
+      res.write('data: [DONE]\n\n');
+      res.end();
     }
-
-    res.json({
-      success: true,
-      domain: domainInfo,
-      saved: savedCount,
-      message: '成功创建领域'
-    });
   } catch (error: any) {
     console.error('Generate domain error:', error);
-    res.status(500).json({ success: false, message: error.message || '生成领域失败' });
+    try {
+      res.setHeader('Content-Type', 'application/json');
+      res.status(500).json({ success: false, message: error.message || '生成领域失败' });
+    } catch (e) {}
   }
 });
 
@@ -639,3 +712,4 @@ router.post('/cache', async (req: any, res: any) => {
 });
 
 export default router;
+

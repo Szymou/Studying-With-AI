@@ -1,1 +1,21 @@
 Server running on http://localhost:7777
+API endpoints:
+  POST /api/auth/register - 注册
+  POST /api/auth/login - 登录
+  GET /api/questions - 获取题目列表
+  GET /api/questions/random/:count - 随机题目
+  POST /api/questions/:id/answer - 提交答案
+  GET /api/questions/progress/stats - 学习统计
+  POST /api/favorites/:id - 收藏题目
+  DELETE /api/favorites/:id - 取消收藏
+  GET /api/favorites - 收藏列表
+  GET /api/custom-questions - 自定义题目列表
+  POST /api/custom-questions - 创建自定义题目
+  POST /api/custom-questions/batch - 批量导入
+  PUT /api/custom-questions/:id - 更新自定义题目
+  DELETE /api/custom-questions/:id - 删除自定义题目
+  POST /api/ai/chat/new - 新建AI对话
+  POST /api/ai/chat/:id/message - AI咨询
+  GET /api/ai/chat/list - 对话列表
+  GET /api/domains - 获取技术领域列表
+  POST /api/ai/generate - AI生成题目
