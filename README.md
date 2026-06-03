@@ -4,6 +4,25 @@
 
 **AI 驱动的面试学习系统 — AI 生成题目 · 智能刷题 · 间隔重复 · 语音朗读 · 自定义领域**
 
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)](https://www.typescriptlang.org/)
+
+<p align="center">
+  <img src="https://img.shields.io/badge/AI-Interview-orange" alt="AI Interview"/>
+  <img src="https://img.shields.io/badge/Spaced%20Repetition-SM2-purple" alt="SM-2"/>
+  <img src="https://img.shields.io/badge/TTS-Edge%20TTS-blue" alt="TTS"/>
+  <img src="https://img.shields.io/badge/AI%20Generate-8A2BE2" alt="AI Generate"/>
+</p>
+
+<p align="center">
+  🧠 AI 生题 · 📚 自定义领域 · 🎯 智能复习 · 🔄 交错练习 · 🗣️ 语音朗读
+</p>
+
+---
+
+## 📸 功能截图
+
 | 首页 | AI 助手 |
 |:---:|:---:|
 | ![首页](img/index.png) | ![AI助手](img/indexAI.png) |
@@ -18,17 +37,6 @@
 
 | 扩充题目 | AI 咨询 |
 |:---:|:---:|
-| ![扩充题目](img/newSkilled.png) | ![AI咨询](img/discussAI.png) |
-
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)](https://www.typescriptlang.org/)
-
-<p align="center">
-  <img src="https://img.shields.io/badge/AI-Interview-orange" alt="AI Interview"/>
-  <img src="https://img.shields.io/badge/Spaced%20Repetition-SM2-purple" alt="SM-2"/>
-  <img src="https://img.shields.io/badge/TTS-Edge%20TTS-blue" alt="TTS"/>
-  <img src="https://img.shields.io/badge/AI%20Generate-8A2BE2" alt="AI Generate"/>
 </p>
 
 <p align="center">
