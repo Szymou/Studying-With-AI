@@ -109,6 +109,10 @@
         #aiModalContent table { width: 100%; border-collapse: collapse; }
         #aiModalContent th, #aiModalContent td { padding: 8px 12px; border: 1px solid var(--markdown-border); text-align: left; }
         #aiModalContent img { max-width: 100%; height: auto; }
+        .code-copy-btn { position:absolute; top:4px; right:4px; padding:2px 8px; border:none; border-radius:4px; background:#334155; color:#e2e8f0; cursor:pointer; font-size:13px; z-index:1; line-height:1.6; }
+        .code-copy-btn:hover { background:#475569; }
+        body.theme-dark .code-copy-btn { background:#475569; color:#cbd5e1; }
+        body.theme-dark .code-copy-btn:hover { background:#64748b; }
         .fav-list-item { display: flex; justify-content: space-between; align-items: flex-start; }
         .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
         .toast { background: var(--surface); border-radius: 12px; padding: 16px 24px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); display: flex; align-items: center; gap: 12px; animation: toastIn 0.3s ease; font-size: 15px; color: var(--text-primary); min-width: 200px; max-width: 400px; }
@@ -443,7 +447,30 @@
         // 绑定 nav 按钮事件
         document.querySelectorAll('.nav-btn').forEach(b => b.addEventListener('click', () => loadTab(b.dataset.tab)));
 
-        function renderMd(c) { return typeof marked !== 'undefined' ? marked.parse(c) : c.replace(/\n/g, '<br>'); }
+        function renderMd(c) {
+            const html = typeof marked !== 'undefined' ? marked.parse(c) : c.replace(/\n/g, '<br>');
+            // 给代码块加复制按钮
+            return html.replace(/<pre><code class="([^"]*)">/g, '<div style="position:relative;"><button class="code-copy-btn" onclick="copyCode(this)" title="复制代码">📋</button><pre><code class="$1">')
+                .replace(/<pre><code>/g, '<div style="position:relative;"><button class="code-copy-btn" onclick="copyCode(this)" title="复制代码">📋</button><pre><code>')
+                .replace(/<\/code><\/pre>/g, '</code></pre></div>');
+        }
+        function copyCode(btn) {
+            const code = btn.parentElement.querySelector('code');
+            if (!code) return;
+            const text = code.textContent || '';
+            navigator.clipboard.writeText(text).then(() => {
+                btn.textContent = '✅';
+                setTimeout(() => { btn.textContent = '📋'; }, 1500);
+            }).catch(() => {
+                // 降级：选中文本
+                const range = document.createRange();
+                range.selectNodeContents(code);
+                const sel = window.getSelection();
+                sel.removeAllRanges(); sel.addRange(range);
+                btn.textContent = '✅';
+                setTimeout(() => { btn.textContent = '📋'; }, 1500);
+            });
+        }
 
         // ---- AI单题助手（多答案Tab）----
         function renderAiModal(keepPollingMsg = false) {
