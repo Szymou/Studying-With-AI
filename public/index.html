@@ -157,9 +157,43 @@
         .sidebar-section { flex: 1; }
         .sidebar-bottom { border-top: 1px solid #2d2d4e; padding-top: 8px; margin-top: auto; }
         .main-content { flex: 1; padding: 20px 30px; max-width: calc(100% - 200px); }
+        /* ===== 移动端适配 ===== */
+        @media (max-width: 768px) {
+            .app-layout { flex-direction: column; }
+            .sidebar { position: fixed; left: -220px; top: 0; z-index: 999; transition: left 0.3s; width: 200px; height: 100vh; }
+            .sidebar.open { left: 0; }
+            .main-content { max-width: 100%; padding: 12px 10px; }
+            .header { flex-wrap: wrap; gap: 8px !important; padding: 10px; }
+            .header h1 { font-size: 16px; }
+            #statsBar { padding: 6px 10px !important; gap: 8px !important; font-size: 12px; flex-wrap: wrap; }
+            #statsBar div div:first-child { font-size: 14px !important; }
+            .nav { gap: 4px; padding: 6px; overflow-x: auto; flex-wrap: nowrap; }
+            .nav-btn { font-size: 12px; padding: 6px 10px !important; white-space: nowrap; }
+            .container { padding: 8px !important; }
+            .question-card { padding: 10px !important; }
+            .question-title { font-size: 14px; }
+            .btn-group { gap: 4px; }
+            .btn { font-size: 12px; padding: 6px 10px !important; }
+            .modal-content { width: 95% !important; max-width: 95% !important; margin: 10px auto; max-height: 90vh; }
+            .cfg-grid { grid-template-columns: 1fr !important; }
+            .ai-chat-box { height: 50vh !important; }
+            .ai-chat-input input { font-size: 13px; }
+            .app-layout > .sidebar + .main-content .sidebar, .convo-list { display: none; }
+            #domainsList { grid-template-columns: 1fr 1fr !important; }
+            .code-copy-btn { padding: 2px 6px !important; font-size: 11px !important; }
+            .hamburger { display: flex !important; }
+        }
+        .hamburger { display: none; position: fixed; top: 8px; left: 8px; z-index: 1000; background: #1a1a2e; color: #fff; border: none; border-radius: 6px; padding: 8px 12px; font-size: 20px; cursor: pointer; }
+        .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 998; }
+        .sidebar-overlay.show { display: block; }
+        @media (max-width: 768px) {
+            .sidebar-overlay.show { display: block; }
+        }
     </style>
 </head>
 <body>
+    <button class="hamburger" id="hamburger" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
     <div class="app-layout">
         <nav class="sidebar" id="sidebar"><!-- 由JS动态渲染 --></nav>
         <div class="main-content">
@@ -272,6 +306,7 @@
 
         async function switchDomain(code) {
             stopTTS();
+            if (window.innerWidth <= 768) toggleSidebar(); // 手机自动收起侧边栏
             const d = domains.find(d => d.code === code);
             if (!d) return;
             setDomainUI(true);
@@ -286,6 +321,11 @@
             } else {
                 loadTab('practice');
             }
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
+            document.getElementById('sidebarOverlay').classList.toggle('show');
         }
 
         function setDomainUI(visible) {
