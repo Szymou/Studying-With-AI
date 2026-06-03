@@ -634,7 +634,8 @@
             if (btn) btn.textContent = '🔊 朗读';
         }
         function playTTS(rawText) {
-            if (_speaking) { stopTTS(); return; }
+            // 如果正在播放，先停掉再播新的
+            if (_speaking) stopTTS();
             // 确认引擎设置（未设置时默认浏览器）
             if (!localStorage.getItem('ttsEngine')) {
                 localStorage.setItem('ttsEngine', 'browser');
@@ -791,6 +792,8 @@
                 .replace(/\n{3,}/g, '\n\n')
                 .trim();
             if (!text || text === 'AI思考中...') return;
+            // 如果有其他 TTS 正在播放（如聊天自动朗读），先停掉
+            if (_speaking) stopTTS();
             playTTS(text);
         }
 
