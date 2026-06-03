@@ -19,6 +19,24 @@ router.get('/', async (req, res) => {
         res.status(500).json({ error: '获取领域列表失败' });
     }
 });
+// 重新排序领域
+router.put('/reorder', async (req, res) => {
+    try {
+        const { order } = req.body;
+        if (!Array.isArray(order)) {
+            return res.status(400).json({ error: 'order 必须是数组' });
+        }
+        for (let i = 0; i < order.length; i++) {
+            await db_1.default.run('UPDATE tech_domains SET sort_order = ? WHERE code = ?', [i, order[i]]);
+        }
+        const domains = await db_1.default.all('SELECT code, name, icon, description, sort_order, is_active FROM tech_domains ORDER BY sort_order');
+        res.json(domains);
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ error: '排序更新失败' });
+    }
+});
 // 删除领域
 router.delete('/:code', async (req, res) => {
     try {

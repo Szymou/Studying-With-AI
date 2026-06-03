@@ -276,7 +276,7 @@
             let html = '<div class="sidebar-header">技术领域</div>';
             for (const d of domains) {
                 const active = d.code === currentDomain.code ? 'active' : '';
-                html += '<div class="sidebar-item ' + active + '" onclick="switchDomain(\'' + d.code + '\')">' +
+                html += '<div class="sidebar-item ' + active + '" draggable="true" data-code="' + d.code + '" onclick="switchDomain(\'' + d.code + '\')">' +
                     '<span class="icon">' + (d.icon || '📚') + '</span>' +
                     '<span>' + d.name + '</span></div>';
             }
@@ -293,6 +293,51 @@
             
             sidebar.innerHTML = html;
         }
+
+        // ---- 侧边栏拖拉排序 ----
+        let _dragCode = null;
+        document.getElementById('sidebar').addEventListener('dragstart', (e) => {
+            const item = e.target.closest('.sidebar-item');
+            if (!item || !item.draggable) return;
+            _dragCode = item.dataset.code;
+            item.style.opacity = '0.5';
+        });
+        document.getElementById('sidebar').addEventListener('dragover', (e) => {
+            const item = e.target.closest('.sidebar-item');
+            if (!item || !item.draggable) return;
+            e.preventDefault();
+            item.style.borderLeftColor = '#646cff';
+        });
+        document.getElementById('sidebar').addEventListener('dragleave', (e) => {
+            const item = e.target.closest('.sidebar-item');
+            if (!item) return;
+            item.style.borderLeftColor = '';
+        });
+        document.getElementById('sidebar').addEventListener('drop', async (e) => {
+            e.preventDefault();
+            const target = e.target.closest('.sidebar-item');
+            if (!target || !target.draggable || !_dragCode || _dragCode === target.dataset.code) return;
+            // 重排 domains 数组
+            const fromIdx = domains.findIndex(d => d.code === _dragCode);
+            const toIdx = domains.findIndex(d => d.code === target.dataset.code);
+            if (fromIdx === -1 || toIdx === -1) return;
+            const [moved] = domains.splice(fromIdx, 1);
+            domains.splice(toIdx, 0, moved);
+            renderSidebar();
+            // 持久化到后端
+            try {
+                await api('PUT', '/api/domains/reorder', { order: domains.map(d => d.code) });
+            } catch(e) {
+                console.error('保存排序失败', e);
+                toast('排序保存失败', '⚠️');
+            }
+        });
+        document.getElementById('sidebar').addEventListener('dragend', (e) => {
+            const item = e.target.closest('.sidebar-item');
+            if (item) item.style.opacity = '';
+            document.querySelectorAll('#sidebar .sidebar-item[draggable]').forEach(el => el.style.borderLeftColor = '');
+            _dragCode = null;
+        });
 
         function toast(msg, icon) {
             const c = document.getElementById('toastContainer');
