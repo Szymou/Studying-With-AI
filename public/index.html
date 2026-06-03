@@ -208,6 +208,7 @@
             <div class="modal-footer">
                 <button class="btn btn-fav" id="aiFavBtn" onclick="favCurrentQuestion()" style="display:none;">♡ 收藏本题</button>
                 <button class="btn" id="aiRefreshBtn" onclick="refreshAIAnswer()">🔄 刷新答案</button>
+                <button class="btn" id="aiSpeakBtn" onclick="speakAI()" style="display:none;">🔊 朗读</button>
                 <button class="btn btn-primary" onclick="closeAiModal()">关闭</button>
             </div>
         </div>
@@ -501,6 +502,12 @@
             document.getElementById('aiModal').style.display = 'flex';
             // 显示收藏按钮
             document.getElementById('aiFavBtn').style.display = currentAiQuestionId ? '' : 'none';
+            // 有内容时显示朗读按钮
+            const speakBtn = document.getElementById('aiSpeakBtn');
+            if (speakBtn) {
+                const contentText = document.getElementById('aiModalContent')?.textContent || '';
+                speakBtn.style.display = contentText && contentText !== 'AI思考中...' ? '' : 'none';
+            }
         }
 
         function switchAiTab(idx) {
@@ -512,6 +519,7 @@
         function openAiModal(c, isMd) {
             document.getElementById('aiModalContent').innerHTML = isMd ? renderMd(c) : c;
             document.getElementById('aiModal').style.display = 'flex';
+            document.getElementById('aiSpeakBtn').style.display = c ? '' : 'none';
             // 显示题目
             const qDiv = document.getElementById('aiModalQuestion');
             if (currentAiQuestionText) {
@@ -562,7 +570,8 @@
 
         function closeAiModal() {
             if (currentAbortController) { currentAbortController.abort(); currentAbortController = null; }
-            stopAIPolling(); // 关闭弹窗时也停止轮询
+            stopAIPolling();
+            window.speechSynthesis?.cancel(); // 关闭时停止朗读
             document.getElementById('aiModal').style.display = 'none';
             currentAiQuestionId = null;
             currentAiQuestionText = null;
@@ -586,6 +595,29 @@
                 if (text.toLowerCase().includes(mark)) return false;
             }
             return text.length > 300; // 内容较长时默认认为完整
+        }
+
+        // TTS 朗读
+        let _speaking = false;
+        function speakAI() {
+            const contentEl = document.getElementById('aiModalContent');
+            const btn = document.getElementById('aiSpeakBtn');
+            if (!contentEl || !btn) return;
+            if (_speaking) {
+                window.speechSynthesis?.cancel();
+                _speaking = false;
+                btn.textContent = '🔊 朗读';
+                return;
+            }
+            const text = contentEl.textContent || contentEl.innerText || '';
+            if (!text || text === 'AI思考中...') return;
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'zh-CN';
+            utterance.rate = 1.0;
+            utterance.onstart = () => { _speaking = true; btn.textContent = '⏹️ 停止'; };
+            utterance.onend = () => { _speaking = false; btn.textContent = '🔊 朗读'; };
+            utterance.onerror = () => { _speaking = false; btn.textContent = '🔊 朗读'; };
+            window.speechSynthesis?.speak(utterance);
         }
 
         // 停止轮询
@@ -684,6 +716,7 @@
                                 full += p.content;
                                 if (first) { openAiModal('', false); first = false; }
                                 document.getElementById('aiModalContent').innerHTML = renderMd(full);
+                                document.getElementById('aiSpeakBtn').style.display = full ? '' : 'none';
                             } else if (p.error && !full) {
                                 throw new Error(p.error);
                             }
