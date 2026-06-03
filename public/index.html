@@ -588,7 +588,7 @@
         function closeAiModal() {
             if (currentAbortController) { currentAbortController.abort(); currentAbortController = null; }
             stopAIPolling();
-            _speaking = false; // 停止 TTS
+            stopTTS();
             document.getElementById('aiModal').style.display = 'none';
             currentAiQuestionId = null;
             currentAiQuestionText = null;
@@ -616,13 +616,23 @@
 
         // TTS 朗读（支持浏览器语音 + 服务端 Edge TTS）
         let _speaking = false;
+        let _ttsAudio = null;
+        function stopTTS() {
+            _speaking = false;
+            if (_ttsAudio) {
+                try { _ttsAudio.pause(); _ttsAudio = null; } catch(e) {}
+            }
+            window.speechSynthesis?.cancel();
+            const btn = document.getElementById('aiSpeakBtn');
+            if (btn) btn.textContent = '🔊 朗读';
+        }
         function playTTS(text) {
-            if (_speaking) return;
+            if (_speaking) { stopTTS(); return; }
             _speaking = true;
             const engine = localStorage.getItem('ttsEngine') || 'browser';
             const rate = parseFloat(localStorage.getItem('ttsRate') || '1.0');
             const btn = document.getElementById('aiSpeakBtn');
-            if (btn) btn.textContent = '⏹️ 播放中';
+            if (btn) btn.textContent = '⏹️ 停止';
 
             if (engine === 'browser') {
                 // 浏览器 SpeechSynthesis
@@ -635,7 +645,6 @@
                     const idx = parseInt(voiceIdx);
                     if (voices[idx]) utterance.voice = voices[idx];
                 }
-                utterance.onstart = () => {};
                 utterance.onend = () => { _speaking = false; if (btn) btn.textContent = '🔊 朗读'; };
                 utterance.onerror = () => { _speaking = false; if (btn) btn.textContent = '🔊 朗读'; };
                 window.speechSynthesis?.speak(utterance);
@@ -650,21 +659,18 @@
                     if (!r.ok) throw new Error('TTS 请求失败');
                     return r.blob();
                 }).then(blob => {
+                    if (!_speaking) return; // 已被停止
                     const url = URL.createObjectURL(blob);
                     const audio = new Audio(url);
                     audio.playbackRate = rate;
-                    audio.onended = () => { _speaking = false; if (btn) btn.textContent = '🔊 朗读'; URL.revokeObjectURL(url); };
-                    audio.onerror = () => { _speaking = false; if (btn) btn.textContent = '🔊 朗读'; };
-                    audio.play().catch(() => { _speaking = false; if (btn) btn.textContent = '🔊 朗读'; });
+                    _ttsAudio = audio;
+                    audio.onended = () => { _speaking = false; if (btn) btn.textContent = '🔊 朗读'; _ttsAudio = null; URL.revokeObjectURL(url); };
+                    audio.onerror = () => { _speaking = false; if (btn) btn.textContent = '🔊 朗读'; _ttsAudio = null; };
+                    audio.play().catch(() => { _speaking = false; if (btn) btn.textContent = '🔊 朗读'; _ttsAudio = null; });
                 }).catch(() => {
                     _speaking = false; if (btn) btn.textContent = '🔊 朗读';
                 });
             }
-        }
-        function stopTTS() {
-            _speaking = false;
-            const btn = document.getElementById('aiSpeakBtn');
-            if (btn) btn.textContent = '🔊 朗读';
         }
 
         // ---- TTS 设置 ----
@@ -737,9 +743,7 @@
             const btn = document.getElementById('aiSpeakBtn');
             if (!contentEl || !btn) return;
             if (_speaking) {
-                // 停止当前播放
-                _speaking = false;
-                btn.textContent = '🔊 朗读';
+                stopTTS();
                 return;
             }
             const text = (contentEl.textContent || contentEl.innerText || '')
