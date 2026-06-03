@@ -2,7 +2,7 @@
 
 # 🧠 Studying-With-AI
 
-**AI 驱动的面试学习系统 — 智能刷题 · 间隔重复 · 语音朗读**
+**AI 驱动的面试学习系统 — AI 生成题目 · 智能刷题 · 间隔重复 · 语音朗读 · 自定义领域**
 
 | 首页 | AI 助手 |
 |:---:|:---:|
@@ -28,6 +28,11 @@
   <img src="https://img.shields.io/badge/AI-Interview-orange" alt="AI Interview"/>
   <img src="https://img.shields.io/badge/Spaced%20Repetition-SM2-purple" alt="SM-2"/>
   <img src="https://img.shields.io/badge/TTS-Edge%20TTS-blue" alt="TTS"/>
+  <img src="https://img.shields.io/badge/AI%20Generate-8A2BE2" alt="AI Generate"/>
+</p>
+
+<p align="center">
+  🧠 AI 生题 · 📚 自定义领域 · 🎯 智能复习 · 🔄 交错练习 · 🗣️ 语音朗读
 </p>
 
 </div>
@@ -56,6 +61,8 @@
 **Studying-With-AI** 是一个面向技术面试准备的 AI 增强型学习系统。它打破传统"刷题软件"的模式，融合**认知科学**与**AI 技术**，提供从学习、练习、复习到反馈的完整闭环。
 
 无论是准备 Java 后端面试，还是学习 Go、Python、前端、数据库等领域的八股文知识，这个系统都能帮你**更高效地记忆**、**更深入地理解**。
+
+除了内置的千道面试题，你还可以 **让 AI 一键生成任意主题的新题目**，或 **创建全新的技能领域**（如 Rust、Kubernetes、系统设计等），系统会自动生成该领域的题目和内容。题库永不枯竭，而且你可以通过设置页自定义 AI 提示词来**控制出题风格**。
 
 ### 核心理念
 
