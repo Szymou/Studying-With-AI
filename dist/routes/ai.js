@@ -59,6 +59,23 @@ const callAi = async (messages) => {
         throw new Error('AI服务调用失败：' + (error.response?.data?.error?.message || error.message));
     }
 };
+// 从数据库读取 AI 提示词
+const getPrompt = async (key, domainName = '') => {
+    try {
+        const row = await db_1.default.get('SELECT value FROM ai_prompts WHERE key = ?', [key]);
+        if (row && row.value) {
+            return row.value.replace('{domain}', domainName);
+        }
+    }
+    catch (e) { }
+    // 降级默认值
+    const defaults = {
+        ai_assistant: '你是一个全栈程序员，用大白话讲技术。回答要通俗易懂，多举生活中的例子，像朋友聊天一样自然，别拽术语。',
+        ai_generate: '你是一位{domain}技术面试出题老师，用大白话写答案。严格按照要求只输出JSON数组，不要其他内容。',
+        ai_error_analysis: '你是一个有耐心的技术导师。用大白话分析用户答错的原因。',
+    };
+    return (defaults[key] || '').replace('{domain}', domainName);
+};
 // ============ AI 流式问答（SSE）- 供前端直接调用 ============
 router.post('/ask', auth_1.authMiddleware, async (req, res) => {
     const { question, userAnswer, questionId } = req.body;
@@ -73,7 +90,7 @@ router.post('/ask', auth_1.authMiddleware, async (req, res) => {
         res.write('data: [DONE]\n\n');
         return res.end();
     }
-    const systemPrompt = '你是一个全栈程序员，用大白话讲技术。回答要通俗易懂，多举生活中的例子，像朋友聊天一样自然，别拽术语。';
+    const systemPrompt = await getPrompt('ai_assistant');
     const userPrompt = userAnswer
         ? '问题：' + question + '\n用户的回答：' + userAnswer + '\n请评价是否正确，并给出标准答案（含代码示例）。'
         : '问题：' + question + '\n请给出详细准确的答案，包含具体代码示例说明原理。';
@@ -320,7 +337,7 @@ router.post('/chat/:id/message/stream', async (req, res) => {
             res.write('data: [DONE]\n\n');
             return res.end();
         }
-        const fullMessages = [{ role: 'system', content: '你是一个全栈程序员，用大白话讲技术。回答要通俗易懂，多举生活中的例子，像朋友聊天一样自然，别拽术语。' }, ...messages];
+        const fullMessages = [{ role: 'system', content: await getPrompt('ai_assistant') }, ...messages];
         let buffer = '';
         let fullReply = '';
         const response = await axios_1.default.post(AI_BASE_URL + '/chat/completions', { model: AI_MODEL, messages: fullMessages, temperature: 0.7, stream: true }, { headers: { 'Authorization': 'Bearer ' + AI_API_KEY, 'Content-Type': 'application/json' }, responseType: 'stream', timeout: 30000 });
@@ -428,7 +445,7 @@ router.post('/generate', async (req, res) => {
             const response = await axios_1.default.post(AI_BASE_URL + '/chat/completions', {
                 model: AI_MODEL,
                 messages: [
-                    { role: 'system', content: '你是一位' + domainName + '技术面试出题老师，用大白话写答案。严格按照要求只输出JSON数组，不要其他内容。' },
+                    { role: 'system', content: (await getPrompt('ai_generate', domainName)) },
                     { role: 'user', content: prompt }
                 ],
                 temperature: 0.7,
@@ -611,7 +628,7 @@ router.post('/generate-domain', async (req, res) => {
             const response = await axios_1.default.post(AI_BASE_URL + '/chat/completions', {
                 model: AI_MODEL,
                 messages: [
-                    { role: 'system', content: '你是一位' + domainInfo.name + '技术面试出题老师，用大白话写答案。严格按照要求只输出JSON数组，不要其他内容。' },
+                    { role: 'system', content: (await getPrompt('ai_generate', domainInfo.name)) },
                     { role: 'user', content: questionsPrompt }
                 ],
                 temperature: 0.7,
@@ -745,13 +762,14 @@ router.post('/analyze-error', async (req, res) => {
         if (!AI_API_KEY) {
             return res.json({ type: 'unknown', suggestion: 'AI服务未配置，无法分析错误' });
         }
-        const prompt = `你是一个很有耐心的技术导师。看下面这道题，用户答得怎么样？
+        const sysPrompt = await getPrompt('ai_error_analysis');
+        const prompt = `${sysPrompt}
 
 问题：${question}
 用户回答：${userAnswer || '（用户没答）'}
 标准答案：${correctAnswer}
 
-用大白话分析一下用户错在哪，从以下三类选一个：
+从以下三类选一个分析：
 - 概念不清：用户压根没理解这个知识点
 - 记忆混淆：用户把几个相似的知识点搞混了
 - 细节遗漏：用户大方向对了，但漏了关键细节
@@ -774,6 +792,30 @@ router.post('/analyze-error', async (req, res) => {
     catch (error) {
         console.error('Error analysis error:', error);
         res.status(500).json({ error: '分析失败' });
+    }
+});
+// ============ AI提示词管理 ============
+router.get('/prompts', async (req, res) => {
+    try {
+        const rows = await db_1.default.all('SELECT key, value, description FROM ai_prompts ORDER BY key');
+        res.json(rows);
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ error: '获取提示词失败' });
+    }
+});
+router.post('/prompts', async (req, res) => {
+    try {
+        const { key, value } = req.body;
+        if (!key || value === undefined)
+            return res.status(400).json({ error: '缺少 key 或 value' });
+        await db_1.default.run('INSERT OR REPLACE INTO ai_prompts (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)', [key, value]);
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ error: '保存提示词失败' });
     }
 });
 // ============ AI配置状态 ============

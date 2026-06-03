@@ -147,6 +147,27 @@ const initDb = async () => {
         await (0, exports.run)(`ALTER TABLE favorites ADD COLUMN tech_domain TEXT DEFAULT 'java'`);
     }
     catch (e) { }
+    // AI 提示词配置表
+    try {
+        await (0, exports.run)(`CREATE TABLE IF NOT EXISTS ai_prompts (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    description TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+    }
+    catch (e) { }
+    const promptCount = await (0, exports.get)('SELECT COUNT(*) as cnt FROM ai_prompts');
+    if (!promptCount.cnt) {
+        const defaults = [
+            ['ai_assistant', '你是一个全栈程序员，用大白话讲技术。回答要通俗易懂，多举生活中的例子，像朋友聊天一样自然，别拽术语。', 'AI 助手/AI 咨询的系统提示词'],
+            ['ai_generate', '你是一位{domain}技术面试出题老师，用大白话写答案。严格按照要求只输出JSON数组，不要其他内容。', '生成题目/生成新领域的系统提示词'],
+            ['ai_error_analysis', '你是一个有耐心的技术导师。用大白话分析用户答错的原因。', '错误分析的系统提示词'],
+        ];
+        for (const d of defaults) {
+            await (0, exports.run)('INSERT INTO ai_prompts (key, value, description) VALUES (?, ?, ?)', d);
+        }
+    }
     const count = await (0, exports.get)('SELECT COUNT(*) as count FROM questions');
     if (!count.count) {
         await seedSampleQuestions();

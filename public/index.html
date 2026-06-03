@@ -1432,6 +1432,14 @@
                     '<input type="checkbox" id="hidePracticeInput"' + (localStorage.getItem('hidePracticeInput') === 'true' ? ' checked' : '') + ' onchange="localStorage.setItem(\'hidePracticeInput\', this.checked);toast(\'练习模式已' + (localStorage.getItem('hidePracticeInput') === 'true' ? '关闭' : '开启') + '输入框\', \'⚙️\')"> ' +
                     '随机练习页隐藏答案输入框和提交按钮（仅显示题目）</label></div>' +
                     '</div>' +
+                    // AI 提示词配置
+                    '<div style="margin-top:30px;padding:20px;border:1px solid var(--border-color);border-radius:10px;">' +
+                    '<h3 style="margin-bottom:15px;">🤖 AI 提示词配置</h3>' +
+                    '<p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px;">修改 AI 的回答风格，保存后立即生效。</p>' +
+                    '<div id="promptEditor"></div>' +
+                    '<button class="btn btn-primary" onclick="savePrompts()" style="margin-top:10px;">💾 保存提示词</button>' +
+                    '</div>' +
+
                     '<div class="btn-group" style="margin-top:15px;">' +
                     '<button class="btn btn-primary" onclick="saveSettings()">💾 保存配置</button>' +
                     '<button class="btn btn-danger" onclick="restartService()">🔄 重启服务</button>' +
@@ -1448,6 +1456,8 @@
                 
                 // 加载领域列表
                 loadDomainsList();
+                // 加载 AI 提示词
+                loadPrompts();
             } catch(e) { c.innerHTML = '<div class="loading">加载失败：' + e.message + '</div>'; }
         }
 
@@ -1720,6 +1730,47 @@
             } catch(e) {
                 toast('保存失败：' + e.message, '❌');
             }
+        }
+
+        async function loadPrompts() {
+            const el = document.getElementById('promptEditor');
+            if (!el) return;
+            try {
+                const prompts = await api('GET', '/api/ai/prompts');
+                if (!Array.isArray(prompts) || !prompts.length) { el.innerHTML = '<div class="loading">暂无提示词</div>'; return; }
+                const labels = { ai_assistant: '🤖 AI助手 / AI咨询', ai_generate: '📝 生成题目 / 生成新领域', ai_error_analysis: '🔍 错误分析' };
+                const descs = {
+                    ai_assistant: '控制 AI 助手和对话的回答风格',
+                    ai_generate: '控制生成面试题时的回答风格，{domain} 会自动替换为领域名称',
+                    ai_error_analysis: '控制答错时错误分析的语气'
+                };
+                el.innerHTML = prompts.map(p => `
+                    <div class="cfg-item" style="margin-bottom:10px;">
+                        <label style="font-weight:600;">${labels[p.key] || p.key}</label>
+                        <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">${descs[p.key] || ''}</div>
+                        <textarea id="prompt-${p.key}" style="width:100%;min-height:60px;padding:8px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;font-family:inherit;background:var(--input-bg);color:var(--text-primary);resize:vertical;">${p.value.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+                    </div>
+                `).join('');
+            } catch(e) {
+                if (el) el.innerHTML = '<div style="color:var(--text-secondary);font-size:13px;">加载失败：' + e.message + '</div>';
+            }
+        }
+        async function savePrompts() {
+            const el = document.getElementById('promptEditor');
+            if (!el) return;
+            const textareas = el.querySelectorAll('textarea');
+            let saved = 0, failed = 0;
+            for (const ta of textareas) {
+                const key = ta.id.replace('prompt-', '');
+                const value = ta.value.trim();
+                if (!value) continue;
+                try {
+                    await api('POST', '/api/ai/prompts', { key, value });
+                    saved++;
+                } catch(e) { failed++; }
+            }
+            if (failed) toast('保存 ' + saved + ' 个成功，' + failed + ' 个失败', '⚠️');
+            else toast('已保存 ' + saved + ' 个提示词', '✅');
         }
 
         async function restartService() {
