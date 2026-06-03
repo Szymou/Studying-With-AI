@@ -808,9 +808,14 @@ router.post('/prompts', async (req, res) => {
 
 
 // ============ TTS 语音合成 ============
-import { execSync } from 'child_process';
+import { execSync, exec } from 'child_process';
+import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
+
+
+// 内存缓存（最多 50 条）
+const ttsCache = new Map<string, { audio: Buffer, time: number }>();
 
 router.post('/tts', async (req, res) => {
   try {
@@ -835,6 +840,16 @@ router.post('/tts', async (req, res) => {
       .trim();
 
     if (!cleanText) return res.status(400).json({ error: '清理后无文本' });
+    // 缓存 key
+    const cacheKey = voice + ':' + crypto.createHash('md5').update(cleanText).digest('hex');
+    const cached = ttsCache.get(cacheKey);
+    if (cached && Date.now() - cached.time < 3600000) {
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('X-Audio-Length', cached.audio.length);
+      res.setHeader('X-TTS-Cache', 'hit');
+      return res.send(cached.audio);
+    }
+
 
     const tmpDir = path.join(__dirname, '../../data/tts_cache');
     if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
@@ -857,6 +872,13 @@ router.post('/tts', async (req, res) => {
 
     // 读取音频并返回
     const audioBuf = fs.readFileSync(outputFile);
+    // 写入缓存
+    ttsCache.set(cacheKey, { audio: audioBuf, time: Date.now() });
+    if (ttsCache.size > 50) {
+      const oldest = [...ttsCache.entries()].sort((a, b) => a[1].time - b[1].time)[0];
+      if (oldest) ttsCache.delete(oldest[0]);
+    }
+
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('X-Audio-Length', audioBuf.length);
     res.send(audioBuf);

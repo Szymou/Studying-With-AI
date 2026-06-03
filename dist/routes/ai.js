@@ -820,8 +820,11 @@ router.post('/prompts', async (req, res) => {
 });
 // ============ TTS 语音合成 ============
 const child_process_1 = require("child_process");
+const crypto_1 = __importDefault(require("crypto"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
+// 内存缓存（最多 50 条）
+const ttsCache = new Map();
 router.post('/tts', async (req, res) => {
     try {
         const { text, voice = 'zh-CN-XiaoxiaoNeural' } = req.body;
@@ -844,6 +847,15 @@ router.post('/tts', async (req, res) => {
             .trim();
         if (!cleanText)
             return res.status(400).json({ error: '清理后无文本' });
+        // 缓存 key
+        const cacheKey = voice + ':' + crypto_1.default.createHash('md5').update(cleanText).digest('hex');
+        const cached = ttsCache.get(cacheKey);
+        if (cached && Date.now() - cached.time < 3600000) {
+            res.setHeader('Content-Type', 'audio/mpeg');
+            res.setHeader('X-Audio-Length', cached.audio.length);
+            res.setHeader('X-TTS-Cache', 'hit');
+            return res.send(cached.audio);
+        }
         const tmpDir = path_1.default.join(__dirname, '../../data/tts_cache');
         if (!fs_1.default.existsSync(tmpDir))
             fs_1.default.mkdirSync(tmpDir, { recursive: true });
@@ -867,6 +879,13 @@ router.post('/tts', async (req, res) => {
         }
         // 读取音频并返回
         const audioBuf = fs_1.default.readFileSync(outputFile);
+        // 写入缓存
+        ttsCache.set(cacheKey, { audio: audioBuf, time: Date.now() });
+        if (ttsCache.size > 50) {
+            const oldest = [...ttsCache.entries()].sort((a, b) => a[1].time - b[1].time)[0];
+            if (oldest)
+                ttsCache.delete(oldest[0]);
+        }
         res.setHeader('Content-Type', 'audio/mpeg');
         res.setHeader('X-Audio-Length', audioBuf.length);
         res.send(audioBuf);
