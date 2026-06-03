@@ -1515,7 +1515,9 @@
 
                 for (let i = 0; i < targets.length; i++) {
                     const cat = targets[i];
-                    res.innerHTML = '<span class="loading">📈 正在扩充 <strong>' + cat + '</strong> (' + (i + 1) + '/' + targets.length + ')...</span>';
+                    let streamHtml = '';
+                    res.innerHTML = '<div><span class="loading">📈 正在扩充 <strong>' + cat + '</strong> (' + (i + 1) + '/' + targets.length + ')</span></div>' +
+                        '<div id="genExpandStream" style="margin-top:8px;padding:8px;background:var(--surface-secondary);border-radius:6px;font-size:12px;max-height:200px;overflow-y:auto;white-space:pre-wrap;"></div>';
 
                     const r = await fetch(API_BASE + '/api/ai/generate', {
                         method: 'POST',
@@ -1538,6 +1540,11 @@
                             if (d === '[DONE]') continue;
                             try {
                                 const p = JSON.parse(d);
+                                if (p.type === 'content') {
+                                    streamHtml += p.content;
+                                    const el = document.getElementById('genExpandStream');
+                                    if (el) el.textContent = streamHtml.slice(-500);
+                                }
                                 if (p.type === 'done' && p.parsed) {
                                     totalSaved += p.saved || 0;
                                     totalSkipped += p.skipped || 0;
