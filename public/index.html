@@ -458,18 +458,25 @@
             const code = btn.parentElement.querySelector('code');
             if (!code) return;
             const text = code.textContent || '';
-            navigator.clipboard.writeText(text).then(() => {
-                btn.textContent = '✅';
-                setTimeout(() => { btn.textContent = '📋'; }, 1500);
-            }).catch(() => {
-                // 降级：选中文本
-                const range = document.createRange();
-                range.selectNodeContents(code);
-                const sel = window.getSelection();
-                sel.removeAllRanges(); sel.addRange(range);
-                btn.textContent = '✅';
-                setTimeout(() => { btn.textContent = '📋'; }, 1500);
-            });
+            // 剪贴板 API 在非 HTTPS 下不可用，需先检查
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    btn.textContent = '✅';
+                    setTimeout(() => { btn.textContent = '📋'; }, 1500);
+                }).catch(() => fallbackCopy(code, btn));
+            } else {
+                fallbackCopy(code, btn);
+            }
+        }
+        function fallbackCopy(code, btn) {
+            const range = document.createRange();
+            range.selectNodeContents(code);
+            const sel = window.getSelection();
+            sel.removeAllRanges(); sel.addRange(range);
+            document.execCommand('copy');
+            sel.removeAllRanges();
+            btn.textContent = '✅';
+            setTimeout(() => { btn.textContent = '📋'; }, 1500);
         }
 
         // ---- AI单题助手（多答案Tab）----
