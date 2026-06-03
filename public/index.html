@@ -209,15 +209,6 @@
                 <button class="btn btn-fav" id="aiFavBtn" onclick="favCurrentQuestion()" style="display:none;">♡ 收藏本题</button>
                 <button class="btn" id="aiRefreshBtn" onclick="refreshAIAnswer()">🔄 刷新答案</button>
                 <button class="btn" id="aiSpeakBtn" onclick="speakAI()" style="display:none;">🔊 朗读</button>
-                <select id="aiVoiceSelect" style="display:none;padding:4px 8px;border:1px solid var(--border-color);border-radius:5px;font-size:12px;background:var(--input-bg);color:var(--text-primary);max-width:140px;"></select>
-                <select id="aiSpeedSelect" style="display:none;padding:4px 8px;border:1px solid var(--border-color);border-radius:5px;font-size:12px;background:var(--input-bg);color:var(--text-primary);">
-                    <option value="0.5">0.5x 慢速</option>
-                    <option value="0.8">0.8x</option>
-                    <option value="1.0" selected>1.0x 正常</option>
-                    <option value="1.3">1.3x</option>
-                    <option value="1.5">1.5x 快速</option>
-                    <option value="2.0">2.0x 极速</option>
-                </select>
                 <button class="btn btn-primary" onclick="closeAiModal()">关闭</button>
             </div>
         </div>
@@ -518,15 +509,11 @@
             document.getElementById('aiModal').style.display = 'flex';
             // 显示收藏按钮
             document.getElementById('aiFavBtn').style.display = currentAiQuestionId ? '' : 'none';
-            // 有内容时显示朗读按钮和语音选择
+            // 有内容时显示朗读按钮
             const speakBtn = document.getElementById('aiSpeakBtn');
             if (speakBtn) {
                 const contentText = document.getElementById('aiModalContent')?.textContent || '';
-                const hasContent = contentText && contentText !== 'AI思考中...';
-                speakBtn.style.display = hasContent ? '' : 'none';
-                document.getElementById('aiVoiceSelect').style.display = hasContent && (window.speechSynthesis?.getVoices()?.length || 0) > 0 ? '' : 'none';
-                document.getElementById('aiSpeedSelect').style.display = hasContent ? '' : 'none';
-                if (hasContent) loadVoices();
+                speakBtn.style.display = contentText && contentText !== 'AI思考中...' && contentText !== '🤖 AI思考中...' ? '' : 'none';
             }
         }
 
@@ -541,9 +528,7 @@
             document.getElementById('aiModal').style.display = 'flex';
             const hasContent = c && c !== 'AI思考中...' && c !== '🤖 AI思考中...';
             document.getElementById('aiSpeakBtn').style.display = hasContent ? '' : 'none';
-            document.getElementById('aiVoiceSelect').style.display = hasContent && (window.speechSynthesis?.getVoices()?.length || 0) > 0 ? '' : 'none';
-            document.getElementById('aiSpeedSelect').style.display = hasContent ? '' : 'none';
-            if (hasContent) loadVoices();
+            if (hasContent) { /* 朗读按钮已由 renderAiModal 控制 */ }
             // 显示题目
             const qDiv = document.getElementById('aiModalQuestion');
             if (currentAiQuestionText) {
@@ -753,24 +738,7 @@
             if (e.target && e.target.id === 'ttsRate') localStorage.setItem('ttsRate', e.target.value);
         });
 
-        function loadVoices() {
-            const select = document.getElementById('aiVoiceSelect');
-            if (!select) return;
-            const voices = window.speechSynthesis?.getVoices() || [];
-            const saved = localStorage.getItem('ttsVoice');
-            const cnVoices = voices.filter(v => v.lang && v.lang.startsWith('zh'));
-            select.innerHTML = '<option value="">默认</option>' + cnVoices.map((v, i) => {
-                const origIdx = voices.indexOf(v);
-                return '<option value="' + origIdx + '"' + (saved === String(origIdx) ? ' selected' : '') + '>' + v.name + '</option>';
-            }).join('');
-            select.style.display = cnVoices.length ? '' : 'none';
-            // 恢复保存的语速
-            const speedSelect = document.getElementById('aiSpeedSelect');
-            if (speedSelect) {
-                const savedSpeed = localStorage.getItem('ttsSpeed');
-                if (savedSpeed) speedSelect.value = savedSpeed;
-            }
-        }
+        // 语音设置已迁移到设置页面
         function speakAI() {
             const contentEl = document.getElementById('aiModalContent');
             const btn = document.getElementById('aiSpeakBtn');
@@ -895,11 +863,7 @@
                                 document.getElementById('aiModalContent').innerHTML = renderMd(full);
                                 const hasContent = !!full;
                                 document.getElementById('aiSpeakBtn').style.display = hasContent ? '' : 'none';
-                                if (hasContent) {
-                                    document.getElementById('aiVoiceSelect').style.display = (window.speechSynthesis?.getVoices()?.length || 0) > 0 ? '' : 'none';
-                                    document.getElementById('aiSpeedSelect').style.display = '';
-                                    loadVoices();
-                                }
+                                // 朗读按钮已由 display 逻辑自动控制
                             } else if (p.error && !full) {
                                 throw new Error(p.error);
                             }
@@ -2096,12 +2060,9 @@
             }
         })();
 
-        // TTS 语音列表变化时更新选择器
+        // TTS 语音列表加载完成（预留）
         if (window.speechSynthesis) {
-            window.speechSynthesis.addEventListener('voiceschanged', () => {
-                const select = document.getElementById('aiVoiceSelect');
-                if (select && select.style.display !== 'none') loadVoices();
-            });
+            window.speechSynthesis.addEventListener('voiceschanged', () => {});
         }
     </script>
 </body>
