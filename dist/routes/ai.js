@@ -1,4 +1,4 @@
-﻿﻿"use strict";
+"use strict";
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -41,6 +41,7 @@ const db_1 = __importDefault(require("../db"));
 const auth_1 = require("../auth");
 const axios_1 = __importDefault(require("axios"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const similarity_1 = require("../utils/similarity");
 dotenv_1.default.config();
 const router = express_1.default.Router();
 router.use(auth_1.authMiddleware);
@@ -462,7 +463,12 @@ router.post('/generate', async (req, res) => {
                     catch (e) { }
                 }
             });
+            let _ended = false;
             response.data.on('end', async () => {
+                // 防止多次触发
+                if (_ended)
+                    return;
+                _ended = true;
                 // 解析并保存题目
                 let generatedQuestions;
                 try {
@@ -480,22 +486,46 @@ router.post('/generate', async (req, res) => {
                     generatedQuestions = JSON.parse(cleaned);
                     if (!Array.isArray(generatedQuestions))
                         throw new Error('not array');
+                    // 对本次生成结果自身去重（AI 偶发性重复输出）
+                    const seen = new Set();
+                    const uniqueQuestions = generatedQuestions.filter((q) => {
+                        if (!q.question)
+                            return false;
+                        const key = q.question.trim().toLowerCase().slice(0, 100);
+                        if (seen.has(key))
+                            return false;
+                        seen.add(key);
+                        return true;
+                    });
                     let savedCount = 0;
+                    let skippedCount = 0;
+                    let dupInResponse = generatedQuestions.length - uniqueQuestions.length;
                     if (saveToCustom) {
-                        for (const q of generatedQuestions) {
+                        for (const q of uniqueQuestions) {
                             if (!q.question || !q.answer)
                                 continue;
+                            const dup = await (0, similarity_1.isDuplicateQuestion)(q.question, tech_domain || 'java', db_1.default);
+                            if (dup.isDuplicate) {
+                                skippedCount++;
+                                continue;
+                            }
                             await db_1.default.run('INSERT INTO custom_questions (user_id, category, subcategory, question, answer, tags, tech_domain) VALUES (?, ?, ?, ?, ?, ?, ?)', [req.user.userId, topic, 'AI生成', q.question, q.answer, 'ai-generated', tech_domain || 'java']);
                             savedCount++;
                         }
                     }
-                    res.write('data: ' + JSON.stringify({ type: 'done', parsed: true, count: generatedQuestions.length, saved: savedCount, questions: generatedQuestions }) + '\n\n');
+                    res.write('data: ' + JSON.stringify({ type: 'done', parsed: true, count: uniqueQuestions.length, saved: savedCount, skipped: skippedCount + dupInResponse, questions: uniqueQuestions }) + '\n\n');
                 }
                 catch (e) {
-                    res.write('data: ' + JSON.stringify({ type: 'done', parsed: false, raw: fullContent, message: 'AI返回格式异常' }) + '\n\n');
+                    try {
+                        res.write('data: ' + JSON.stringify({ type: 'done', parsed: false, raw: fullContent, message: 'AI返回格式异常' }) + '\n\n');
+                    }
+                    catch (w) { }
                 }
-                res.write('data: [DONE]\n\n');
-                res.end();
+                try {
+                    res.write('data: [DONE]\n\n');
+                    res.end();
+                }
+                catch (w) { }
             });
             response.data.on('error', (err) => {
                 console.error('Stream error:', err);
@@ -615,7 +645,12 @@ router.post('/generate-domain', async (req, res) => {
                 }
                 catch (e) { }
             });
+            let _domainEnded = false;
             response.data.on('end', async () => {
+                // 防止多次触发
+                if (_domainEnded)
+                    return;
+                _domainEnded = true;
                 // 解析并保存题目
                 try {
                     let cleaned = fullContent.trim()
@@ -632,13 +667,30 @@ router.post('/generate-domain', async (req, res) => {
                     const questions = JSON.parse(cleaned);
                     if (!Array.isArray(questions))
                         throw new Error('not array');
+                    // 对本次生成结果自身去重
+                    const seen = new Set();
+                    const uniqueQuestions = questions.filter((q) => {
+                        if (!q.question)
+                            return false;
+                        const key = q.question.trim().toLowerCase().slice(0, 100);
+                        if (seen.has(key))
+                            return false;
+                        seen.add(key);
+                        return true;
+                    });
                     res.write('data: ' + JSON.stringify({ type: 'step', content: '💾 正在保存题目到数据库...' }) + '\n\n');
-                    for (const q of questions) {
+                    for (const q of uniqueQuestions) {
                         if (!q.question || !q.answer)
                             continue;
                         try {
                             const diffMap = { 'easy': 'easy', 'medium': 'medium', 'hard': 'hard', 'beginner': 'easy', 'elementary': 'easy', 'intermediate': 'medium', 'advanced': 'hard', 'expert': 'hard' };
                             const difficulty = diffMap[(q.difficulty || 'medium').toLowerCase().trim()] || 'medium';
+                            // 去重校验
+                            const dup = await (0, similarity_1.isDuplicateQuestion)(q.question, domainInfo.code, db_1.default);
+                            if (dup.isDuplicate) {
+                                console.log('⏭️ 跳过重复题目:', q.question.substring(0, 60));
+                                continue;
+                            }
                             await db_1.default.run('INSERT INTO questions (category, subcategory, question, answer, difficulty, tags, tech_domain) VALUES (?, ?, ?, ?, ?, ?, ?)', [q.category || '基础', q.subcategory || '', q.question, q.answer, difficulty, q.tags || '', domainInfo.code]);
                             savedCount++;
                         }
@@ -649,10 +701,16 @@ router.post('/generate-domain', async (req, res) => {
                     res.write('data: ' + JSON.stringify({ type: 'done', domain: domainInfo, saved: savedCount }) + '\n\n');
                 }
                 catch (e) {
-                    res.write('data: ' + JSON.stringify({ type: 'done', domain: domainInfo, saved: 0, parseError: true, raw: fullContent }) + '\n\n');
+                    try {
+                        res.write('data: ' + JSON.stringify({ type: 'done', domain: domainInfo, saved: 0, parseError: true, raw: fullContent }) + '\n\n');
+                    }
+                    catch (w) { }
                 }
-                res.write('data: [DONE]\n\n');
-                res.end();
+                try {
+                    res.write('data: [DONE]\n\n');
+                    res.end();
+                }
+                catch (w) { }
             });
             response.data.on('error', (err) => {
                 console.error('Stream error:', err);
@@ -712,4 +770,3 @@ router.post('/cache', async (req, res) => {
     }
 });
 exports.default = router;
-
