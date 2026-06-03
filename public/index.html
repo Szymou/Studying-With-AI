@@ -635,6 +635,10 @@
         }
         function playTTS(rawText) {
             if (_speaking) { stopTTS(); return; }
+            // 确认引擎设置（未设置时默认浏览器）
+            if (!localStorage.getItem('ttsEngine')) {
+                localStorage.setItem('ttsEngine', 'browser');
+            }
             // 清洗 Markdown 符号
             const text = rawText
                 .replace(/<[^>]+>/g, '')
@@ -652,6 +656,7 @@
             if (!text) return;
             _speaking = true;
             const engine = localStorage.getItem('ttsEngine') || 'browser';
+            console.log('TTS engine:', engine); // 确认当前引擎
             const rate = parseFloat(localStorage.getItem('ttsRate') || '1.0');
             const btn = document.getElementById('aiSpeakBtn');
             if (btn) btn.textContent = '⏹️ 停止';
@@ -705,8 +710,11 @@
         function initTtsSettings() {
             const el = document.getElementById('ttsEngine');
             if (!el) return;
-            el.value = localStorage.getItem('ttsEngine') || 'browser';
-            document.getElementById('ttsRate').value = localStorage.getItem('ttsRate') || '1.0';
+            // 首次访问时保存默认值
+            if (!localStorage.getItem('ttsEngine')) localStorage.setItem('ttsEngine', 'browser');
+            if (!localStorage.getItem('ttsRate')) localStorage.setItem('ttsRate', '1.0');
+            el.value = localStorage.getItem('ttsEngine');
+            document.getElementById('ttsRate').value = localStorage.getItem('ttsRate');
             onTtsEngineChange();
         }
         function onTtsEngineChange() {
