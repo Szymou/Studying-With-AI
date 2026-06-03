@@ -1485,12 +1485,14 @@
                                     toast('成功生成 ' + domain.name + ' 领域！', '✅');
                                     await loadDomains();
                                     loadDomainsList();
+                                    await switchDomain(domain.code);
                                     setTimeout(() => closeGenerateDomainModal(), 2000);
                                 } else if (domain) {
                                     progressText.innerHTML = '✅ 领域已创建，但题目解析失败（' + (p.parseError ? '格式异常' : '生成中断') + '），请手动添加题目';
                                     toast('领域已创建，但题目生成需手动处理', '⚠️');
                                     await loadDomains();
                                     loadDomainsList();
+                                    await switchDomain(domain.code);
                                     setTimeout(() => closeGenerateDomainModal(), 2000);
                                 } else {
                                     progressText.innerHTML = '❌ 生成失败';
