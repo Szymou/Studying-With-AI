@@ -389,7 +389,7 @@ router.post('/generate', async (req, res) => {
     // 从数据库中获取领域名称，避免硬编码
     const domainRow = tech_domain ? await db.get('SELECT name FROM tech_domains WHERE code = ?', [tech_domain]) : null;
     const domainName = domainRow ? domainRow.name : 'Java';
-    const prompt = '你是一位' + domainName + '技术面试题专家。请生成' + finalCount + '道关于"' + topic + '"的' + domainName + '面试题。\n\n要求：\n1. 以严格JSON数组格式返回，不要包含任何其他文字说明\n2. 格式：[{"question":"问题","answer":"答案"}]\n3. 题目要有深度，包含实际开发中的常见问题\n4. 答案要准确详细';
+    const prompt = '你是一位' + domainName + '技术面试题专家。请生成' + finalCount + '道关于"' + topic + '"的' + domainName + '面试题。\n\n要求：\n1. 以严格JSON数组格式返回，不要包含任何其他文字说明\n2. 格式：[{"question":"问题","answer":"答案"}]\n3. 题目要有实际价值，贴近面试常见场景\n4. 答案简洁精炼，点到即止，不要长篇大论';
 
     // 设置SSE响应头
     res.setHeader('Content-Type', 'text/event-stream');
@@ -596,7 +596,7 @@ router.post('/generate-domain', async (req, res) => {
     let fullContent = '';
 
     try {
-      const questionsPrompt = `你是一位${domainInfo.name}技术面试题专家。请生成${numQuestions}道${domainInfo.name}面试题。\n\n要求：\n1. 覆盖基础、进阶、高级难度\n2. 包含不同分类（基础语法、并发、框架、性能优化等）\n3. 题目要有深度，符合实际面试场景\n4. 答案准确详细，尽可能包含代码示例\n\n返回JSON数组格式：\n[{"category":"分类名称","subcategory":"子分类（可选）","question":"问题","answer":"答案","difficulty":"easy|medium|hard","tags":"标签（多个用逗号分隔）"}]\n\n只返回JSON数组，不要包含任何其他说明。`;
+      const questionsPrompt = `你是一位${domainInfo.name}技术面试题专家。请生成${numQuestions}道${domainInfo.name}面试题。\n\n要求：\n1. 覆盖基础、进阶、高级难度\n2. 包含不同分类（基础语法、并发、框架、性能优化等）\n3. 题目符合实际面试场景\n4. 答案简洁精炼，点到即止，不要代码示例\n\n返回JSON数组格式：\n[{"category":"分类名称","subcategory":"子分类（可选）","question":"问题","answer":"答案","difficulty":"easy|medium|hard","tags":"标签（多个用逗号分隔）"}]\n\n只返回JSON数组，不要包含任何其他说明。`;
 
       const response = await axios.post(
         AI_BASE_URL + '/chat/completions',
