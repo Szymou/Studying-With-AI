@@ -210,6 +210,14 @@
                 <button class="btn" id="aiRefreshBtn" onclick="refreshAIAnswer()">🔄 刷新答案</button>
                 <button class="btn" id="aiSpeakBtn" onclick="speakAI()" style="display:none;">🔊 朗读</button>
                 <select id="aiVoiceSelect" style="display:none;padding:4px 8px;border:1px solid var(--border-color);border-radius:5px;font-size:12px;background:var(--input-bg);color:var(--text-primary);max-width:140px;"></select>
+                <select id="aiSpeedSelect" style="display:none;padding:4px 8px;border:1px solid var(--border-color);border-radius:5px;font-size:12px;background:var(--input-bg);color:var(--text-primary);">
+                    <option value="0.5">0.5x 慢速</option>
+                    <option value="0.8">0.8x</option>
+                    <option value="1.0" selected>1.0x 正常</option>
+                    <option value="1.3">1.3x</option>
+                    <option value="1.5">1.5x 快速</option>
+                    <option value="2.0">2.0x 极速</option>
+                </select>
                 <button class="btn btn-primary" onclick="closeAiModal()">关闭</button>
             </div>
         </div>
@@ -510,6 +518,7 @@
                 const hasContent = contentText && contentText !== 'AI思考中...';
                 speakBtn.style.display = hasContent ? '' : 'none';
                 document.getElementById('aiVoiceSelect').style.display = hasContent && (window.speechSynthesis?.getVoices()?.length || 0) > 0 ? '' : 'none';
+                document.getElementById('aiSpeedSelect').style.display = hasContent ? '' : 'none';
                 if (hasContent) loadVoices();
             }
         }
@@ -526,6 +535,7 @@
             const hasContent = c && c !== 'AI思考中...' && c !== '🤖 AI思考中...';
             document.getElementById('aiSpeakBtn').style.display = hasContent ? '' : 'none';
             document.getElementById('aiVoiceSelect').style.display = hasContent && (window.speechSynthesis?.getVoices()?.length || 0) > 0 ? '' : 'none';
+            document.getElementById('aiSpeedSelect').style.display = hasContent ? '' : 'none';
             if (hasContent) loadVoices();
             // 显示题目
             const qDiv = document.getElementById('aiModalQuestion');
@@ -616,6 +626,12 @@
                 '<option value="' + i + '"' + (saved === String(i) ? ' selected' : '') + '>' + v.name + ' (' + v.lang + ')' + '</option>'
             ).join('');
             select.style.display = voices.length ? '' : 'none';
+            // 恢复保存的语速
+            const speedSelect = document.getElementById('aiSpeedSelect');
+            if (speedSelect) {
+                const savedSpeed = localStorage.getItem('ttsSpeed');
+                if (savedSpeed) speedSelect.value = savedSpeed;
+            }
         }
         function speakAI() {
             const contentEl = document.getElementById('aiModalContent');
@@ -646,6 +662,13 @@
                     utterance.voice = voices[idx];
                     localStorage.setItem('ttsVoice', select.value);
                 }
+            }
+
+            // 使用选中的语速
+            const speedSelect = document.getElementById('aiSpeedSelect');
+            if (speedSelect) {
+                utterance.rate = parseFloat(speedSelect.value) || 1.0;
+                localStorage.setItem('ttsSpeed', speedSelect.value);
             }
 
             utterance.onstart = () => { _speaking = true; btn.textContent = '⏹️ 停止'; };
@@ -754,6 +777,7 @@
                                 document.getElementById('aiSpeakBtn').style.display = hasContent ? '' : 'none';
                                 if (hasContent) {
                                     document.getElementById('aiVoiceSelect').style.display = (window.speechSynthesis?.getVoices()?.length || 0) > 0 ? '' : 'none';
+                                    document.getElementById('aiSpeedSelect').style.display = '';
                                     loadVoices();
                                 }
                             } else if (p.error && !full) {
