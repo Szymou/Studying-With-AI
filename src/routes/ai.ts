@@ -839,8 +839,8 @@ router.post('/tts', async (req, res) => {
     const tmpDir = path.join(__dirname, '../../data/tts_cache');
     if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
     const timestamp = Date.now();
-    const inputFile = path.join(tmpDir, `input_\${timestamp}.txt`);
-    const outputFile = path.join(tmpDir, `output_\${timestamp}.mp3`);
+    const inputFile = path.join(tmpDir, `input_${timestamp}.txt`);
+    const outputFile = path.join(tmpDir, `output_${timestamp}.mp3`);
 
     fs.writeFileSync(inputFile, cleanText, 'utf-8');
 

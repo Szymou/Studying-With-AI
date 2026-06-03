@@ -848,8 +848,8 @@ router.post('/tts', async (req, res) => {
         if (!fs_1.default.existsSync(tmpDir))
             fs_1.default.mkdirSync(tmpDir, { recursive: true });
         const timestamp = Date.now();
-        const inputFile = path_1.default.join(tmpDir, `input_\${timestamp}.txt`);
-        const outputFile = path_1.default.join(tmpDir, `output_\${timestamp}.mp3`);
+        const inputFile = path_1.default.join(tmpDir, `input_${timestamp}.txt`);
+        const outputFile = path_1.default.join(tmpDir, `output_${timestamp}.mp3`);
         fs_1.default.writeFileSync(inputFile, cleanText, 'utf-8');
         try {
             (0, child_process_1.execSync)(`edge-tts --file "${inputFile}" --voice ${voice} --write-media "${outputFile}"`, {
