@@ -1087,14 +1087,18 @@
                                 streamContent.scrollTop = streamContent.scrollHeight;
                             } else if (data.type === 'done') {
                                 if (data.parsed) {
-                                    res.innerHTML = '<div style="color:#48bb78;">✅ 成功生成 ' + data.count + ' 题，自动保存到自定义题库 ' + data.saved + ' 题</div><pre style="font-size:12px;background:#f7fafc;padding:10px;margin-top:5px;overflow:auto;white-space:pre-wrap;">' + JSON.stringify(data.questions, null, 2) + '</pre><div class="btn-group" style="margin-top:10px;"><button class="btn btn-primary" onclick="closeAIGenAndRefresh()">✅ 关闭并刷新</button></div>';
+                                    res.innerHTML = '<div style="color:#48bb78;">✅ 成功生成 ' + data.count + ' 题，已保存到自定义题库</div><pre style="font-size:12px;background:var(--surface-secondary);padding:10px;margin-top:5px;overflow:auto;white-space:pre-wrap;">' + JSON.stringify(data.questions, null, 2) + '</pre>';
                                     toast('AI生成了 ' + data.count + ' 题', '✅');
-                                    loadManage();
+                                    setTimeout(() => { document.getElementById('aiGenForm')?.remove(); loadManage(); }, 1500);
                                 } else {
-                                    res.innerHTML = '<div style="color:#ed8936;">⚠️ AI返回格式异常，请重试</div><pre style="font-size:12px;background:#f7fafc;padding:10px;margin-top:5px;overflow:auto;">' + (data.raw || '') + '</pre><div class="btn-group" style="margin-top:10px;"><button class="btn" onclick="document.getElementById(\'aiGenForm\')?.remove();loadManage()">🔄 刷新页面</button></div>';
+                                    res.innerHTML = '<div style="color:#ed8936;">⚠️ AI返回格式异常，请重试</div><pre style="font-size:12px;background:var(--surface-secondary);padding:10px;margin-top:5px;overflow:auto;">' + (data.raw || '') + '</pre>';
+                                    toast('AI返回格式异常，已自动刷新', '⚠️');
+                                    setTimeout(() => { document.getElementById('aiGenForm')?.remove(); loadManage(); }, 1500);
                                 }
                             } else if (data.type === 'error') {
-                                res.innerHTML = '<div style="color:#e53e3e;">❌ 生成失败：' + data.content + '</div><div class="btn-group" style="margin-top:10px;"><button class="btn" onclick="document.getElementById(\'aiGenForm\')?.remove();loadManage()">🔄 刷新页面</button></div>';
+                                res.innerHTML = '<div style="color:#e53e3e;">❌ 生成失败：' + data.content + '</div>';
+                                toast('生成失败：' + data.content, '❌');
+                                setTimeout(() => { document.getElementById('aiGenForm')?.remove(); loadManage(); }, 2000);
                             }
                         } catch (e) {}
                     }
