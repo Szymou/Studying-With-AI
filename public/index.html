@@ -1415,7 +1415,8 @@
                 '<button class="btn btn-ai" onclick="showAIGenerate()">🤖 AI生成题目</button></div>' +
                 '<div id="mList"><div class="loading">加载中...</div></div>';
             try {
-                const qs = await api('GET', '/api/questions?limit=200&domain=' + encodeURIComponent(currentDomain.code));
+                const allQs = await api('GET', '/api/questions?limit=200&domain=' + encodeURIComponent(currentDomain.code));
+                const qs = (allQs || []).filter(function(q) { return q.source !== 'custom'; });
                 const cqs = await api('GET', '/api/custom-questions?domain=' + encodeURIComponent(currentDomain.code));
                 const ml = document.getElementById('mList'); ml.innerHTML = '';
                 const totalSystem = Array.isArray(qs) ? qs.length : 0;
