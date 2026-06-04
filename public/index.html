@@ -1909,10 +1909,10 @@
                 const cfg = await api('GET', '/api/ai/config');
                 c.innerHTML = '<h2>⚙️ 系统设置</h2>' +
                     '<div class="cfg-grid">' +
-                    '<div class="cfg-item"><label>AI接口地址</label><input id="cfgUrl" value="' + (cfg.base_url||'') + '" placeholder="http://127.0.0.1:22217"></div>' +
-                    '<div class="cfg-item"><label>AI模型名称</label><input id="cfgModel" value="' + (cfg.model||'') + '" placeholder="deepseek-default"></div>' +
-                    '<div class="cfg-item"><label>API密钥</label><input id="cfgKey" value="' + (localStorage.getItem('ai_key')||'') + '" placeholder="sk-..."></div>' +
-                    '<div class="cfg-item"><label>后端端口</label><input id="cfgPort" value="7777" placeholder="7777"></div>' +
+                    '<div class="cfg-item"><label>AI接口地址</label><input id="cfgUrl" value="' + (cfg.ai_api_base_url || cfg.base_url || '') + '" placeholder="http://127.0.0.1:22217"></div>' +
+                    '<div class="cfg-item"><label>AI模型名称</label><input id="cfgModel" value="' + (cfg.ai_model || cfg.model || '') + '" placeholder="deepseek-default"></div>' +
+                    '<div class="cfg-item"><label>API密钥</label><input id="cfgKey" value="' + (cfg.ai_api_key || localStorage.getItem('ai_key') || '') + '" placeholder="sk-..."></div>' +
+                    '<div class="cfg-item"><label>后端端口</label><input id="cfgPort" value="' + (cfg.port || '7777') + '" placeholder="7777"></div>' +
                     '</div>' +
                     '<div class="cfg-grid" style="margin-top:15px;">' +
                     '<div class="cfg-item" style="grid-column:span 2;"><label style="display:flex;align-items:center;gap:10px;cursor:pointer;">' +

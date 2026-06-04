@@ -5,6 +5,8 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import { isDuplicateQuestion } from '../utils/similarity';
 import { DEFAULT_AI_PROMPTS } from '../config';
+import fs from 'fs';
+import path from 'path';
 
 dotenv.config();
 
@@ -807,8 +809,6 @@ router.post('/prompts', async (req, res) => {
 // ============ TTS 语音合成 ============
 import { execSync, exec } from 'child_process';
 import crypto from 'crypto';
-import path from 'path';
-import fs from 'fs';
 
 
 // 内存缓存（最多 50 条）
@@ -893,10 +893,25 @@ router.post('/tts', async (req, res) => {
 
 // ============ AI配置状态 ============
 router.get('/config', async (req, res) => {
+  // 从 .env 文件读取，而非 runtime process.env（反映磁盘真实值）
+  let envConfig = { ai_api_key: '', ai_api_base_url: '', ai_model: '', port: '' };
+  try {
+    const envPath = path.join(__dirname, '../../.env');
+    const content = fs.readFileSync(envPath, 'utf-8');
+    const mKey = content.match(/^AI_API_KEY=(.*)/m);
+    const mUrl = content.match(/^AI_API_BASE_URL=(.*)/m);
+    const mModel = content.match(/^AI_MODEL=(.*)/m);
+    const mPort = content.match(/^PORT=(.*)/m);
+    if (mKey) envConfig.ai_api_key = mKey[1].trim();
+    if (mUrl) envConfig.ai_api_base_url = mUrl[1].trim();
+    if (mModel) envConfig.ai_model = mModel[1].trim();
+    if (mPort) envConfig.port = mPort[1].trim();
+  } catch (e) {}
   res.json({
     configured: !!AI_API_KEY,
     base_url: AI_BASE_URL,
     model: AI_MODEL,
+    ...envConfig,
     tip: AI_API_KEY ? 'AI服务已配置' : '请在.env中设置AI_API_KEY'
   });
 });
