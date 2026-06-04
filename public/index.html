@@ -566,7 +566,9 @@
             }
         }
 
+        let _selectedTab = -1;
         function switchAiTab(idx) {
+            _selectedTab = idx;
             document.querySelectorAll('#aiModalContent .ans-tab').forEach((t, i) => t.classList.toggle('active', i === idx));
             const div = document.querySelector('#aiModalContent > div:last-child');
             if (div && aiAnswers[idx]) div.innerHTML = renderMd(aiAnswers[idx].text);
@@ -955,19 +957,25 @@
                                     if (document.getElementById('aiModal').style.display !== 'flex') {
                                         openAiModal('', false);
                                     }
+                                    _selectedTab = -1;
                                     first = false;
                                 }
-                                // 流式输出时保留已有 Tab + 当前流式内容
-                                let streamHtml = '';
+                                // 流式输出时保留 Tab；如果用户切到旧 Tab，不覆盖
                                 if (aiAnswers.length > 0) {
                                     const tabs = aiAnswers.map((a, i) =>
-                                        '<span class="ans-tab' + (i === aiAnswers.length - 1 ? ' active' : '') + '" onclick="switchAiTab(' + i + ')">答案' + (i + 1) + '</span>'
+                                        '<span class="ans-tab' + (i === aiAnswers.length - 1 && _selectedTab < 0 ? ' active' : '') + '" onclick="switchAiTab(' + i + ')">答案' + (i + 1) + '</span>'
                                     ).join('');
-                                    streamHtml = '<div class="ans-tabs">' + tabs + '<span class="ans-tab active">答案' + (aiAnswers.length + 1) + '（生成中）</span></div><div>' + renderMd(full) + '</div>';
+                                    const generatingActive = _selectedTab < 0 || _selectedTab >= aiAnswers.length;
+                                    const newContent = generatingActive ? renderMd(full) : '';
+                                    const streamHtml = '<div class="ans-tabs">' + tabs +
+                                        '<span class="ans-tab' + (generatingActive ? ' active' : '') + '">答案' + (aiAnswers.length + 1) + '（生成中）</span></div>' +
+                                        '<div>' + (generatingActive ? newContent : renderMd(aiAnswers[_selectedTab]?.text || '')) + '</div>';
+                                    if (_selectedTab < 0 || _selectedTab >= aiAnswers.length) {
+                                        document.getElementById('aiModalContent').innerHTML = streamHtml;
+                                    }
                                 } else {
-                                    streamHtml = renderMd(full);
+                                    document.getElementById('aiModalContent').innerHTML = renderMd(full);
                                 }
-                                document.getElementById('aiModalContent').innerHTML = streamHtml;
                                 const hasContent = !!full;
                                 document.getElementById('aiSpeakBtn').style.display = hasContent ? '' : 'none';
                                 // 朗读按钮已由 display 逻辑自动控制
@@ -994,6 +1002,7 @@
         // 全局统一的AI按钮逻辑：查缓存 → 调接口 → 存本地
         async function askAI(qid, qt) {
             aiAnswers = [];
+            _selectedTab = -1;
             // 记录AI访问（不再吞掉错误，让我们知道发生了什么！）
             try {
                 console.log('📝 尝试记录AI访问，题目ID:', qid, '领域:', currentDomain.code);
