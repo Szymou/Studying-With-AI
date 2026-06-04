@@ -951,6 +951,40 @@ router.get('/cache/:qid', async (req: any, res: any) => {
   }
 });
 
+// AI 助手完整会话（多答案 + 讨论）保存
+router.post('/save-session', async (req: any, res: any) => {
+  try {
+    const { questionId, answers, discussions } = req.body;
+    if (!questionId) return res.status(400).json({ error: 'Missing questionId' });
+    const data = JSON.stringify({ answers: answers || [], discussions: discussions || [] });
+    // upsert: 删除旧记录后插入
+    await db.run('DELETE FROM ai_answer_cache WHERE user_id = ? AND question_id = ? AND answer IS NOT NULL', [req.user.userId, questionId]);
+    await db.run('INSERT INTO ai_answer_cache (user_id, question_id, answer) VALUES (?, ?, ?)', [req.user.userId, questionId, data]);
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Save session error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/save-session/:qid', async (req: any, res: any) => {
+  try {
+    const row = await db.get('SELECT answer FROM ai_answer_cache WHERE user_id = ? AND question_id = ?', [req.user.userId, req.params.qid]);
+    if (row && row.answer) {
+      try {
+        const parsed = JSON.parse(row.answer);
+        if (parsed.answers) return res.json(parsed);
+      } catch(e) {
+        // 旧格式：单条答案
+        return res.json({ answers: [{ text: row.answer, ts: Date.now() }], discussions: [] });
+      }
+    }
+    return res.json({ answers: [], discussions: [] });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/cache', async (req: any, res: any) => {
   try {
     const { questionId, answer } = req.body;

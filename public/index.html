@@ -690,8 +690,15 @@
             if (currentAbortController) { currentAbortController.abort(); currentAbortController = null; }
             stopAIPolling();
             stopTTS();
+            // 关闭前保存到数据库
+            if (currentAiQuestionId && (aiAnswers.length || _aiDiscussions.length)) {
+                api('POST', '/api/ai/save-session', { questionId: currentAiQuestionId, answers: aiAnswers, discussions: _aiDiscussions }).catch(() => {});
+            }
             document.getElementById('aiModal').style.display = 'none';
+            currentAiQuestionId = null;
             currentAiQuestionText = null;
+            aiAnswers = [];
+            _aiDiscussions = [];
         }
 
         // 保存轮询定时器的引用
@@ -1020,12 +1027,17 @@
 
         // 全局统一的AI按钮逻辑：查缓存 → 调接口 → 存本地
         async function askAI(qid, qt) {
-            // 同一道题不清空已有答案和讨论
-            if (qid !== currentAiQuestionId) {
-                aiAnswers = [];
-                _aiDiscussions = [];
-            }
+            aiAnswers = [];
+            _aiDiscussions = [];
             _selectedTab = -1;
+            // 从数据库恢复同一题的会话
+            try {
+                const data = await api('GET', '/api/ai/save-session/' + qid);
+                if (data && data.answers && data.answers.length) aiAnswers = data.answers;
+                if (data && data.discussions && data.discussions.length) _aiDiscussions = data.discussions;
+            } catch(e) {}
+            // 有恢复的答案就直接渲染
+            if (aiAnswers.length || _aiDiscussions.length) { renderAiModal(); return; }
             // 恢复刷新按钮显示（可能被 AI评分 隐藏了）
             const refreshBtn = document.getElementById('aiRefreshBtn');
             if (refreshBtn) refreshBtn.style.display = '';
