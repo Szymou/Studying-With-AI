@@ -356,8 +356,8 @@
             
             // 把AI咨询和设置也放到底部
             html += '<div style="margin-top:auto;">';
-            html += '<div class="sidebar-item" onclick="showGenerateDomainModal()" style="margin-top:8px;">' +
-                '<span class="icon">✨</span><span>生成新领域</span></div>';
+            html += '<div class="sidebar-item" onclick="setDomainUI(false);loadTab(\'domains\')" style="margin-top:8px;">' +
+                '<span class="icon">✨</span><span>领域管理</span></div>';
             html += '<div class="sidebar-item" onclick="setDomainUI(false);loadTab(\'ai-chat\')" style="margin-top:4px;">' +
                 '<span class="icon">🤖</span><span>AI 咨询</span></div>';
             html += '<div class="sidebar-item" onclick="setDomainUI(false);loadTab(\'settings\')">' +
@@ -501,7 +501,7 @@
         async function loadTab(t) {
             stopTTS();
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
-            const m = { practice: loadPractice, history: loadHistory, search: loadSearch, manage: loadManage, favorites: loadFavorites, 'ai-chat': loadAIChat, settings: loadSettings };
+            const m = { practice: loadPractice, history: loadHistory, search: loadSearch, manage: loadManage, favorites: loadFavorites, 'ai-chat': loadAIChat, settings: loadSettings, domains: loadDomainsManage };
             if (m[t]) await m[t]();
         }
         // 绑定 nav 按钮事件
@@ -1973,21 +1973,36 @@
                     '<button class="btn btn-danger" onclick="restartService()">🔄 重启服务</button></div>' +
                     '<div id="cfgStatus" style="margin-top:15px;"></div>' +
                     
-                    // 领域管理区域
-                    '<div style="margin-top:30px;padding:20px;border:1px solid var(--border-color);border-radius:10px;">' +
-                    '<h3 style="margin-bottom:15px;display:flex;align-items:center;gap:10px;">📚 技术领域管理' +
-                    '<button class="btn btn-success" onclick="showGenerateDomainModal()" style="font-size:12px;padding:4px 12px;">✨ 生成新领域</button></h3>' +
-                    '<div id="domainsList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">' +
-                    '<div class="loading" style="grid-column:1/-1;">加载领域...</div>' +
-                    '</div>' +
-                    '</div>';
+                    '';
                 
-                // 加载领域列表
-                loadDomainsList();
                 // 加载 AI 提示词
                 loadPrompts();
                 initTtsSettings();
             } catch(e) { c.innerHTML = '<div class="loading">加载失败：' + e.message + '</div>'; }
+        }
+
+        // ---- 领域管理页面 ----
+        async function loadDomainsManage() {
+            const c = document.getElementById('content');
+            c.innerHTML = '<h2>✨ 领域管理</h2>' +
+                // 生成新领域表单
+                '<div style="margin-bottom:20px;padding:20px;border:1px solid var(--border-color);border-radius:10px;">' +
+                '<h3 style="margin-bottom:12px;">➕ 生成新领域</h3>' +
+                '<div class="form-group"><label>领域描述（必填）</label><textarea id="domainDescription" placeholder="例如：一个用于构建数据可视化的现代JavaScript库" style="height:80px;"></textarea></div>' +
+                '<div class="form-group"><label>领域名称（可选，自动生成）</label><input id="domainName" placeholder="例如：React"></div>' +
+                '<div class="form-group"><label>领域代码（可选，自动生成）</label><input id="domainCode" placeholder="例如：react"></div>' +
+                '<div class="form-group"><label>图标（可选，自动推荐）</label><input id="domainIcon" placeholder="例如：⚛️"></div>' +
+                '<div class="form-group"><label>题目数量</label><input id="domainQuestions" type="number" value="5" min="5" max="100"></div>' +
+                '<div id="generateProgress" style="display:none;margin-top:10px;padding:10px;background:var(--surface-secondary);border-radius:6px;font-size:14px;"><div id="progressText"></div></div>' +
+                '<div class="btn-group" style="margin-top:10px;">' +
+                '<button class="btn btn-primary" id="btnGenerateDomain" onclick="generateNewDomain()">✨ 开始生成</button></div>' +
+                '</div>' +
+                // 已有领域列表
+                '<div style="padding:20px;border:1px solid var(--border-color);border-radius:10px;">' +
+                '<h3 style="margin-bottom:12px;">📚 已有领域</h3>' +
+                '<div id="domainsList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;"><div class="loading">加载中...</div></div>' +
+                '</div>';
+            loadDomainsList();
         }
 
         async function loadDomainsList() {
@@ -2177,8 +2192,9 @@
             btn.disabled = true;
             btn.textContent = '生成中...';
             progress.style.display = 'block';
-            progressText.innerHTML = '🔍 分析领域信息...<br><small style="color:#94a3b8;" id="genDomainStream"></small>';
-            document.getElementById('genDomainStream').textContent = '';
+            const streamEl = document.getElementById('genDomainStream');
+            if (streamEl) { progressText.innerHTML = '🔍 分析领域信息...<br><small style="color:#94a3b8;" id="genDomainStream"></small>'; document.getElementById('genDomainStream').textContent = ''; }
+            else { progressText.innerHTML = '🔍 分析领域信息...'; }
 
             try {
                 const r = await fetch(API_BASE + '/api/ai/generate-domain', {
@@ -2212,12 +2228,17 @@
                         try {
                             const p = JSON.parse(d);
                             if (p.type === 'step') {
-                                progressText.innerHTML = p.content + '<br><small style="color:#94a3b8;" id="genDomainStream"></small>';
+                                if (document.getElementById('genDomainStream')) {
+                                    progressText.innerHTML = p.content + '<br><small style="color:#94a3b8;" id="genDomainStream"></small>';
+                                } else {
+                                    progressText.innerHTML = p.content;
+                                }
                             } else if (p.type === 'domain') {
                                 doneDomain = p.domain;
                             } else if (p.type === 'stream') {
                                 streamContent += (p.content || '');
-                                document.getElementById('genDomainStream').textContent = streamContent.slice(-200);
+                                const sEl = document.getElementById('genDomainStream');
+                                if (sEl) sEl.textContent = streamContent.slice(-200);
                             } else if (p.type === 'done') {
                                 const domain = p.domain || doneDomain;
                                 if (domain && p.saved > 0) {
