@@ -894,7 +894,7 @@ router.post('/tts', async (req, res) => {
 // ============ AI配置状态 ============
 router.get('/config', async (req, res) => {
   // 从 .env 文件读取，而非 runtime process.env（反映磁盘真实值）
-  let envConfig = { ai_api_key: '', ai_api_base_url: '', ai_model: '', port: '', listener: '' };
+  let envConfig: any = { ai_api_key: '', ai_api_base_url: '', ai_model: '', port: '', listener: '', hide_practice_input: '' };
   try {
     const envPath = path.join(__dirname, '../../.env');
     const content = fs.readFileSync(envPath, 'utf-8');
@@ -903,11 +903,13 @@ router.get('/config', async (req, res) => {
     const mModel = content.match(/^AI_MODEL=(.*)/m);
     const mPort = content.match(/^PORT=(.*)/m);
     const mListener = content.match(/^LISTENER=(.*)/m);
+    const mHide = content.match(/^HIDE_PRACTICE_INPUT=(.*)/m);
     if (mKey) envConfig.ai_api_key = mKey[1].trim();
     if (mUrl) envConfig.ai_api_base_url = mUrl[1].trim();
     if (mModel) envConfig.ai_model = mModel[1].trim();
     if (mPort) envConfig.port = mPort[1].trim();
     if (mListener) envConfig.listener = mListener[1].trim();
+    if (mHide) envConfig.hide_practice_input = mHide[1].trim();
   } catch (e) {}
   res.json({
     configured: !!AI_API_KEY,

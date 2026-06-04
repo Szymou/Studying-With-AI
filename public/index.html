@@ -1929,7 +1929,7 @@
                     '</div>' +
                     '<div class="cfg-grid" style="margin-top:15px;">' +
                     '<div class="cfg-item" style="grid-column:span 2;"><label style="display:flex;align-items:center;gap:10px;cursor:pointer;">' +
-                    '<input type="checkbox" id="hidePracticeInput"' + (localStorage.getItem('hidePracticeInput') === 'true' ? ' checked' : '') + ' onchange="localStorage.setItem(\'hidePracticeInput\', this.checked);window._prac=null;toast(\'练习模式已' + (localStorage.getItem('hidePracticeInput') === 'true' ? '开启' : '关闭') + '输入框\', \'⚙️\')"> ' +
+                    '<input type="checkbox" id="hidePracticeInput"' + (cfg.hide_practice_input === 'true' || localStorage.getItem('hidePracticeInput') === 'true' ? ' checked' : '') + ' onchange="localStorage.setItem(\'hidePracticeInput\', this.checked);window._prac=null;toast(\'练习模式已' + (localStorage.getItem('hidePracticeInput') === 'true' ? '开启' : '关闭') + '输入框\', \'⚙️\')"> ' +
                     '随机练习页隐藏输入框（也可在练习页顶部快速切换 📝/🙈）</label></div>' +
                     '</div>' +
                     // AI 提示词配置
@@ -2252,13 +2252,15 @@
             const model = document.getElementById('cfgModel').value;
             const port = document.getElementById('cfgPort').value;
             const listener = document.getElementById('cfgListener').value;
+            const hideInp = document.getElementById('hidePracticeInput').checked;
             try {
                 const res = await api('POST', '/api/config/update', {
                     ai_api_key: key || undefined,
                     ai_api_base_url: url || undefined,
                     ai_model: model || undefined,
                     port: port || undefined,
-                    listener: listener || undefined
+                    listener: listener || undefined,
+                    hide_practice_input: hideInp
                 });
                 // 同时保存提示词
                 const promptEditor = document.getElementById('promptEditor');

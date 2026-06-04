@@ -50,7 +50,7 @@ app.post('/restart', (req, res) => {
 // 更新 .env 配置
 app.post('/api/config/update', (req, res) => {
   try {
-    const { ai_api_key, ai_api_base_url, ai_model, port, listener } = req.body;
+    const { ai_api_key, ai_api_base_url, ai_model, port, listener, hide_practice_input } = req.body;
     const envPath = path.join(__dirname, '../.env');
     let envContent = fs.readFileSync(envPath, 'utf-8');
 
@@ -59,6 +59,14 @@ app.post('/api/config/update', (req, res) => {
     if (ai_model) envContent = envContent.replace(/^AI_MODEL=.*/m, 'AI_MODEL=' + ai_model);
     if (port) envContent = envContent.replace(/^PORT=.*/m, 'PORT=' + port);
     if (listener) envContent = envContent.replace(/^LISTENER=.*/m, '# LISTENER 是否允许局域网访问  127.0.0.1=仅本地  0.0.0.0=局域网可连\nLISTENER=' + listener);
+    if (hide_practice_input !== undefined) {
+        const val = hide_practice_input ? 'true' : 'false';
+        if (envContent.includes('HIDE_PRACTICE_INPUT=')) {
+            envContent = envContent.replace(/^HIDE_PRACTICE_INPUT=.*/m, 'HIDE_PRACTICE_INPUT=' + val);
+        } else {
+            envContent += '\nHIDE_PRACTICE_INPUT=' + val;
+        }
+    }
 
     fs.writeFileSync(envPath, envContent, 'utf-8');
     res.json({ message: '配置已更新，重启服务后生效', path: envPath });
