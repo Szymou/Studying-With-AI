@@ -1017,8 +1017,11 @@
 
         // 全局统一的AI按钮逻辑：查缓存 → 调接口 → 存本地
         async function askAI(qid, qt) {
-            aiAnswers = [];
-            _aiDiscussions = [];
+            // 同一道题不清空已有答案和讨论
+            if (qid !== currentAiQuestionId) {
+                aiAnswers = [];
+                _aiDiscussions = [];
+            }
             _selectedTab = -1;
             // 记录AI访问（不再吞掉错误，让我们知道发生了什么！）
             try {
