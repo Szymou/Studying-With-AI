@@ -950,7 +950,13 @@
                             const p = JSON.parse(d);
                             if (p.content) {
                                 full += p.content;
-                                if (first) { openAiModal('', false); first = false; }
+                                if (first) {
+                                    // 刷新时不清空已有内容
+                                    if (document.getElementById('aiModal').style.display !== 'flex') {
+                                        openAiModal('', false);
+                                    }
+                                    first = false;
+                                }
                                 // 流式输出时保留已有 Tab + 当前流式内容
                                 let streamHtml = '';
                                 if (aiAnswers.length > 0) {
