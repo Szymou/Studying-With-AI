@@ -1092,7 +1092,11 @@
             c.innerHTML = '<div class="loading">加载中...</div>';
             try {
                 const domainParam = _interleaveMode ? '' : '&domain=' + encodeURIComponent(currentDomain.code);
-                const allQs = await api('GET', '/api/questions?limit=200' + domainParam);
+                const [sysQs, cusQs] = await Promise.all([
+                    api('GET', '/api/questions?limit=200' + domainParam),
+                    api('GET', '/api/custom-questions?limit=200' + (currentDomain?.code ? '&domain=' + encodeURIComponent(currentDomain.code) : ''))
+                ]);
+                const allQs = (sysQs || []).concat(cusQs || []);
                 const cats = [...new Set((allQs||[]).map(q => q.category).filter(Boolean))];
                 const selectedCat = document.getElementById('pracCat')?.value || 'all';
                 let qs = allQs || [];
@@ -1133,7 +1137,11 @@
             const savedCat = document.getElementById('pracCat')?.value || 'all';
             window._prac = null; document.getElementById('content').innerHTML = '<div class="loading">加载中...</div>';
             const domainParam = _interleaveMode ? '' : '&domain=' + encodeURIComponent(currentDomain.code);
-            const allQs = await api('GET', '/api/questions?limit=200' + domainParam);
+            const [sysQs, cusQs] = await Promise.all([
+                api('GET', '/api/questions?limit=200' + domainParam),
+                api('GET', '/api/custom-questions?limit=200' + (currentDomain?.code ? '&domain=' + encodeURIComponent(currentDomain.code) : ''))
+            ]);
+            const allQs = (sysQs || []).concat(cusQs || []);
             const cats = [...new Set((allQs||[]).map(q => q.category).filter(Boolean))];
             const selectedCat = savedCat;
             let qs = allQs || [];
