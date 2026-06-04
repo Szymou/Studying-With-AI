@@ -1425,6 +1425,9 @@
                 statsDiv.innerHTML = '📚 <strong>' + currentDomain.name + '</strong> 共 <strong>' + (totalSystem + totalCustom) + '</strong> 题（系统题库 ' + totalSystem + ' 题，自定义 ' + totalCustom + ' 题）';
                 ml.appendChild(statsDiv);
                 // 自定义题目（按创建时间倒序）显示在最前
+                if (cqs.length) {
+                    const h = document.createElement('div'); h.style.cssText = 'margin:8px 0 4px;font-size:13px;color:var(--text-secondary);font-weight:600;'; h.textContent = '✏️ 自定义题目 (' + cqs.length + ')'; ml.appendChild(h);
+                }
                 for (const q of cqs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 20)) {
                     const d = document.createElement('div'); d.className = 'question-card';
                     d.innerHTML = '<div><span class="question-category">✏️ ' + (q.category||'自定义') + ' <span style="font-size:11px;color:#a0aec0;">' + (q.lang||'zh').toUpperCase() + '</span></span><strong>' + q.question + '</strong></div>' +
@@ -1436,6 +1439,9 @@
                     ml.appendChild(d);
                 }
                 // 系统题库
+                if (qs.length) {
+                    const h = document.createElement('div'); h.style.cssText = 'margin:12px 0 4px;font-size:13px;color:var(--text-secondary);font-weight:600;'; h.textContent = '📚 系统题库 (' + (qs.length || totalSystem) + ')'; ml.appendChild(h);
+                }
                 for (const q of qs.slice(0, 50 - Math.min(cqs.length, 20))) {
                     const d = document.createElement('div'); d.className = 'question-card';
                     d.innerHTML = '<div><span class="question-category">' + q.category + ' <span style="font-size:11px;color:#a0aec0;">' + (q.lang||'zh').toUpperCase() + '</span></span><strong>' + q.question + '</strong></div>' +
