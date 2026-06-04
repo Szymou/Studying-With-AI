@@ -553,8 +553,16 @@
                 if (ansTabsDiv) ansTabsDiv.outerHTML = '<div class="ans-tabs">' + tabsHtml + '</div>';
                 if (contentDiv) contentDiv.innerHTML = content;
             } else {
-                // 否则完全重写
-                document.getElementById('aiModalContent').innerHTML = '<div class="ans-tabs">' + tabsHtml + '</div><div>' + content + '</div>';
+                // 否则完全重写（含讨论记录）
+                let discussHtml = '';
+                if (_aiDiscussions.length > 0) {
+                    discussHtml = _aiDiscussions.map(d =>
+                        '<div style="margin-top:12px;padding:10px;background:var(--surface-secondary);border-radius:8px;">' +
+                        '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">💬 你的追问：' + d.q + '</div>' +
+                        '<div>' + renderMd(d.a) + '</div></div>'
+                    ).join('');
+                }
+                document.getElementById('aiModalContent').innerHTML = '<div class="ans-tabs">' + tabsHtml + '</div><div>' + content + '</div>' + discussHtml;
             }
             
             // 确保弹窗显示
@@ -635,6 +643,7 @@
         }
 
         // ---- AI 讨论 ----
+        let _aiDiscussions = []; // [{q, a}]
         async function sendDiscuss() {
             const inp = document.getElementById('aiDiscussInp');
             const msg = inp.value.trim();
@@ -669,6 +678,7 @@
                     }
                     buf = '';
                 }
+                if (full) _aiDiscussions.push({ q: msg, a: full });
                 discussArea.style.display = 'flex';
             } catch(e) {
                 document.getElementById('aiDiscussResp').innerHTML = '⚠️ ' + e.message;
@@ -684,6 +694,7 @@
             currentAiQuestionId = null;
             currentAiQuestionText = null;
             aiAnswers = [];
+            _aiDiscussions = [];
         }
 
         // 保存轮询定时器的引用
@@ -1008,6 +1019,7 @@
         // 全局统一的AI按钮逻辑：查缓存 → 调接口 → 存本地
         async function askAI(qid, qt) {
             aiAnswers = [];
+            _aiDiscussions = [];
             _selectedTab = -1;
             // 记录AI访问（不再吞掉错误，让我们知道发生了什么！）
             try {
@@ -1658,6 +1670,7 @@
             currentAiQuestionId = qid;
             currentAiQuestionText = document.querySelector('#qc-' + qid + ' .question-title')?.textContent || '';
             aiAnswers = [];
+            _aiDiscussions = [];
             openAiModal('🤖 AI 评分中...', false);
             document.getElementById('aiFavBtn').style.display = 'none';
             document.getElementById('aiDiscussArea').style.display = 'none';
