@@ -40,6 +40,21 @@ const getPrompt = async (key: string, domainName = ''): Promise<string> => {
     }
   } catch (e) {}
   // 降级默认值
+  // 优先从 .env 读取提示词
+  try {
+    const envPath = path.join(__dirname, '../../.env');
+    const envContent = fs.readFileSync(envPath, 'utf-8');
+    const envMap: Record<string, string> = {
+      ai_assistant: 'AI_PROMPT_ASSISTANT',
+      ai_generate: 'AI_PROMPT_GENERATE',
+      ai_error_analysis: 'AI_PROMPT_ERROR',
+    };
+    const envKey = envMap[key];
+    if (envKey) {
+      const m = envContent.match(new RegExp('^' + envKey + '=(.*)', 'm'));
+      if (m) return m[1].trim().replace(/\\n/g, '\n').replace('{domain}', domainName);
+    }
+  } catch (e) {}
   const fallback = DEFAULT_AI_PROMPTS.find(p => p.key === key);
   return (fallback ? fallback.value : '').replace('{domain}', domainName);
 };
@@ -894,7 +909,7 @@ router.post('/tts', async (req, res) => {
 // ============ AI配置状态 ============
 router.get('/config', async (req, res) => {
   // 从 .env 文件读取，而非 runtime process.env（反映磁盘真实值）
-  let envConfig: any = { ai_api_key: '', ai_api_base_url: '', ai_model: '', port: '', listener: '', hide_practice_input: '' };
+  let envConfig: any = { ai_api_key: '', ai_api_base_url: '', ai_model: '', port: '', listener: '', hide_practice_input: '', prompts: {} };
   try {
     const envPath = path.join(__dirname, '../../.env');
     const content = fs.readFileSync(envPath, 'utf-8');
@@ -904,6 +919,11 @@ router.get('/config', async (req, res) => {
     const mPort = content.match(/^PORT=(.*)/m);
     const mListener = content.match(/^LISTENER=(.*)/m);
     const mHide = content.match(/^HIDE_PRACTICE_INPUT=(.*)/m);
+    // 读取提示词
+    for (const pk of ['AI_PROMPT_ASSISTANT', 'AI_PROMPT_GENERATE', 'AI_PROMPT_ERROR']) {
+      const m = content.match(new RegExp('^' + pk + '=(.*)', 'm'));
+      if (m) envConfig.prompts[pk.replace('AI_PROMPT_', '').toLowerCase()] = m[1].trim().replace(/\\n/g, '\n');
+    }
     if (mKey) envConfig.ai_api_key = mKey[1].trim();
     if (mUrl) envConfig.ai_api_base_url = mUrl[1].trim();
     if (mModel) envConfig.ai_model = mModel[1].trim();

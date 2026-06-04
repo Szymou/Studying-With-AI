@@ -2253,6 +2253,17 @@
             const port = document.getElementById('cfgPort').value;
             const listener = document.getElementById('cfgListener').value;
             const hideInp = document.getElementById('hidePracticeInput').checked;
+            // 收集提示词
+            const promptEditor = document.getElementById('promptEditor');
+            const prompts = {};
+            if (promptEditor) {
+                const textareas = promptEditor.querySelectorAll('textarea');
+                for (const ta of textareas) {
+                    const pk = ta.id.replace('prompt-', '');
+                    const pv = ta.value.trim();
+                    if (pv) prompts[pk] = pv;
+                }
+            }
             try {
                 const res = await api('POST', '/api/config/update', {
                     ai_api_key: key || undefined,
@@ -2260,18 +2271,9 @@
                     ai_model: model || undefined,
                     port: port || undefined,
                     listener: listener || undefined,
-                    hide_practice_input: hideInp
+                    hide_practice_input: hideInp,
+                    prompts: prompts
                 });
-                // 同时保存提示词
-                const promptEditor = document.getElementById('promptEditor');
-                if (promptEditor) {
-                    const textareas = promptEditor.querySelectorAll('textarea');
-                    for (const ta of textareas) {
-                        const pk = ta.id.replace('prompt-', '');
-                        const pv = ta.value.trim();
-                        if (pv) await api('POST', '/api/ai/prompts', { key: pk, value: pv });
-                    }
-                }
                 toast('配置已保存到 .env 文件，点「重启服务」生效', '✅');
             } catch(e) {
                 toast('保存失败：' + e.message, '❌');
@@ -2282,19 +2284,21 @@
             const el = document.getElementById('promptEditor');
             if (!el) return;
             try {
-                const prompts = await api('GET', '/api/ai/prompts');
-                if (!Array.isArray(prompts) || !prompts.length) { el.innerHTML = '<div class="loading">暂无提示词</div>'; return; }
-                const labels = { ai_assistant: '🤖 AI助手 / AI咨询', ai_generate: '📝 生成题目 / 生成新领域', ai_error_analysis: '🔍 错误分析' };
+                // 从 /api/ai/config 读取 .env 中的提示词
+                const cfg = await api('GET', '/api/ai/config');
+                const prompts = cfg.prompts || {};
+                const labels = { assistant: '🤖 AI助手 / AI咨询', generate: '📝 生成题目 / 生成新领域', error: '🔍 错误分析' };
                 const descs = {
-                    ai_assistant: '控制 AI 助手和对话的回答风格',
-                    ai_generate: '控制生成面试题时的回答风格，{domain} 会自动替换为领域名称',
-                    ai_error_analysis: '控制答错时错误分析的语气'
+                    assistant: '控制 AI 助手和对话的回答风格',
+                    generate: '控制生成面试题时的回答风格，{domain} 会自动替换为领域名称',
+                    error: '控制答错时错误分析的语气'
                 };
-                el.innerHTML = prompts.map(p => `
+                const keys = ['assistant', 'generate', 'error'];
+                el.innerHTML = keys.map(k => `
                     <div class="cfg-item" style="margin-bottom:10px;">
-                        <label style="font-weight:600;">${labels[p.key] || p.key}</label>
-                        <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">${descs[p.key] || ''}</div>
-                        <textarea id="prompt-${p.key}" style="width:100%;min-height:60px;padding:8px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;font-family:inherit;background:var(--input-bg);color:var(--text-primary);resize:vertical;">${p.value.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+                        <label style="font-weight:600;">${labels[k] || k}</label>
+                        <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">${descs[k] || ''}</div>
+                        <textarea id="prompt-${k}" style="width:100%;min-height:60px;padding:8px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;font-family:inherit;background:var(--input-bg);color:var(--text-primary);resize:vertical;">${(prompts[k] || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
                     </div>
                 `).join('');
             } catch(e) {

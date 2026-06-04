@@ -50,7 +50,7 @@ app.post('/restart', (req, res) => {
 // 更新 .env 配置
 app.post('/api/config/update', (req, res) => {
   try {
-    const { ai_api_key, ai_api_base_url, ai_model, port, listener, hide_practice_input } = req.body;
+    const { ai_api_key, ai_api_base_url, ai_model, port, listener, hide_practice_input, prompts } = req.body;
     const envPath = path.join(__dirname, '../.env');
     let envContent = fs.readFileSync(envPath, 'utf-8');
 
@@ -65,6 +65,21 @@ app.post('/api/config/update', (req, res) => {
             envContent = envContent.replace(/^HIDE_PRACTICE_INPUT=.*/m, 'HIDE_PRACTICE_INPUT=' + val);
         } else {
             envContent += '\nHIDE_PRACTICE_INPUT=' + val;
+        }
+    }
+    // 保存提示词到 .env（多行用 \n 转义）
+    if (prompts && typeof prompts === 'object') {
+        const promptKeys: Record<string, string> = { assistant: 'AI_PROMPT_ASSISTANT', generate: 'AI_PROMPT_GENERATE', error: 'AI_PROMPT_ERROR' };
+        for (const [key, envKey] of Object.entries(promptKeys)) {
+            const val = (prompts as any)[key];
+            if (val !== undefined) {
+                const escaped = (val as string).replace(/\n/g, '\\n');
+                if (envContent.includes(envKey + '=')) {
+                    envContent = envContent.replace(new RegExp('^' + envKey + '=.*', 'm'), envKey + '=' + escaped);
+                } else {
+                    envContent += '\n' + envKey + '=' + escaped;
+                }
+            }
         }
     }
 
