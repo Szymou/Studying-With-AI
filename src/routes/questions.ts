@@ -31,25 +31,10 @@ router.get('/', async (req, res) => {
       params.push(domain);
     }
 
-    let cSql = `SELECT id, category, subcategory, question, NULL as difficulty, tags, tech_domain, 'custom' as source FROM custom_questions WHERE 1=1`;
-    const cParams: any[] = [];
-    if (category) {
-      cSql += ' AND category = ?';
-      cParams.push(category);
-    }
-    if (subcategory) {
-      cSql += ' AND subcategory = ?';
-      cParams.push(subcategory);
-    }
-    if (domain) {
-      cSql += ' AND tech_domain = ?';
-      cParams.push(domain);
-    }
-
-    const fullSql = `SELECT * FROM (${sql} UNION ALL ${cSql}) ORDER BY id LIMIT ? OFFSET ?`;
-    const allParams = [...params, ...cParams, Number(limit), Number(offset)];
-
-    const questions = await db.all(fullSql, allParams);
+    // 不再 UNION ALL，前端分别查两遍再组合
+    sql += ' ORDER BY id LIMIT ? OFFSET ?';
+    params.push(Number(limit), Number(offset));
+    const questions = await db.all(sql, params);
     res.json(questions);
   } catch (error) {
     console.error(error);
