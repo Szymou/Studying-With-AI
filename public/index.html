@@ -902,8 +902,13 @@
                 try {
                     const resp = await api('GET', '/api/ai/cache/' + qid);
                     if (resp && resp.answer) {
-                        // 显示前先清理标记
-                        aiAnswers = [{ text: cleanAnswerForDisplay(resp.answer), ts: Date.now() }];
+                        // 只在首次打开时替换，复用已有答案则追加
+                        const cachedText = cleanAnswerForDisplay(resp.answer);
+                        if (aiAnswers.length === 0) {
+                            aiAnswers = [{ text: cachedText, ts: Date.now() }];
+                        } else if (cachedText !== aiAnswers[aiAnswers.length - 1].text) {
+                            aiAnswers.push({ text: cachedText, ts: Date.now() });
+                        }
                         renderAiModal();
                         
                         // 如果答案没完成，就一直轮询刷新！
@@ -915,7 +920,7 @@
                                     if (pollResp && pollResp.answer) {
                                         // 更新显示最新答案
                                         if (cleanAnswerForDisplay(pollResp.answer) !== aiAnswers[aiAnswers.length - 1].text) {
-                                            aiAnswers = [{ text: cleanAnswerForDisplay(pollResp.answer), ts: Date.now() }];
+                                            aiAnswers[aiAnswers.length - 1] = { text: cleanAnswerForDisplay(pollResp.answer), ts: Date.now() };
                                             renderAiModal();
                                         }
                                         
