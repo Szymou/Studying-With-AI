@@ -140,14 +140,14 @@
 ### 前置要求
 
 - Node.js >= 18
-- npm >= 9
+- pnpm >= 8
 
 ### 1. 克隆并安装
 
 ```bash
 git clone https://github.com/Szymou/Studying-With-AI.git
 cd Studying-With-AI
-npm install
+pnpm install
 ```
 
 ### 2. 配置 AI
@@ -174,10 +174,10 @@ AI_MODEL=gpt-3.5-turbo
 
 ```bash
 # 编译 TypeScript
-npm run build
+pnpm build
 
 # 启动服务
-npm start
+pnpm start
 ```
 
 访问 **http://localhost:7777** 即可使用。
@@ -372,7 +372,7 @@ SQLite 数据库文件 `data/questions.db`，直接复制即可备份。
 
 欢迎贡献！提交 PR 前请确保：
 
-1. 代码通过 TypeScript 编译：`npm run build`
+1. 代码通过 TypeScript 编译：`pnpm build`
 2. 遵循现有代码风格
 3. 新功能请先提 Issue 讨论
 
