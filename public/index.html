@@ -240,7 +240,7 @@
             <div id="aiModalQuestion" style="background:var(--surface-secondary);padding:10px 14px;border-radius:8px;margin-bottom:10px;font-size:14px;color:var(--text-primary);display:none;"></div>
             <div id="aiModalContent" style="line-height: 1.6;">AI思考中...</div>
             <div id="aiDiscussArea" style="display:none;padding:10px 14px;border-top:1px solid var(--border-color);gap:8px;">
-                <input id="aiDiscussInp" placeholder="对此答案有疑问？追问讨论..." style="flex:1;padding:8px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;background:var(--input-bg);color:var(--text-primary);">
+                <input id="aiDiscussInp" placeholder="对此答案有疑问？追问讨论..." onkeydown="if(event.key==='Enter') sendDiscuss()" style="flex:1;padding:8px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;background:var(--input-bg);color:var(--text-primary);">
                 <button class="btn btn-ai" onclick="sendDiscuss()" style="font-size:13px;padding:6px 14px;">💬 讨论</button>
             </div>
             <div class="modal-footer">
@@ -1928,7 +1928,6 @@
                     '<h3 style="margin-bottom:15px;">🤖 AI 提示词配置</h3>' +
                     '<p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px;">修改 AI 的回答风格，保存后立即生效。</p>' +
                     '<div id="promptEditor"></div>' +
-                    '<button class="btn btn-primary" onclick="savePrompts()" style="margin-top:10px;">💾 保存提示词</button>' +
                     '</div>' +
 
                     // TTS 配置
@@ -1956,13 +1955,13 @@
 
                     '<div class="btn-group" style="margin-top:15px;">' +
                     '<button class="btn btn-primary" onclick="saveSettings()">💾 保存配置</button>' +
-                    '<button class="btn btn-danger" onclick="restartService()">🔄 重启服务</button>' +
-                    '<button class="btn btn-success" onclick="showGenerateDomainModal()">✨ 生成新领域</button></div>' +
+                    '<button class="btn btn-danger" onclick="restartService()">🔄 重启服务</button></div>' +
                     '<div id="cfgStatus" style="margin-top:15px;"></div>' +
                     
                     // 领域管理区域
                     '<div style="margin-top:30px;padding:20px;border:1px solid var(--border-color);border-radius:10px;">' +
-                    '<h3 style="margin-bottom:15px;">📚 技术领域管理</h3>' +
+                    '<h3 style="margin-bottom:15px;display:flex;align-items:center;gap:10px;">📚 技术领域管理' +
+                    '<button class="btn btn-success" onclick="showGenerateDomainModal()" style="font-size:12px;padding:4px 12px;">✨ 生成新领域</button></h3>' +
                     '<div id="domainsList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">' +
                     '<div class="loading" style="grid-column:1/-1;">加载领域...</div>' +
                     '</div>' +
@@ -2252,6 +2251,16 @@
                     port: port || undefined,
                     listener: listener || undefined
                 });
+                // 同时保存提示词
+                const promptEditor = document.getElementById('promptEditor');
+                if (promptEditor) {
+                    const textareas = promptEditor.querySelectorAll('textarea');
+                    for (const ta of textareas) {
+                        const pk = ta.id.replace('prompt-', '');
+                        const pv = ta.value.trim();
+                        if (pv) await api('POST', '/api/ai/prompts', { key: pk, value: pv });
+                    }
+                }
                 toast('配置已保存到 .env 文件，点「重启服务」生效', '✅');
             } catch(e) {
                 toast('保存失败：' + e.message, '❌');
