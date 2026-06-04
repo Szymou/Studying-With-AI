@@ -50,22 +50,15 @@ app.post('/restart', (req, res) => {
 // 更新 .env 配置
 app.post('/api/config/update', (req, res) => {
   try {
-    const { ai_api_key, ai_api_base_url, ai_model, port } = req.body;
+    const { ai_api_key, ai_api_base_url, ai_model, port, listener } = req.body;
     const envPath = path.join(__dirname, '../.env');
     let envContent = fs.readFileSync(envPath, 'utf-8');
 
-    if (ai_api_key) {
-      envContent = envContent.replace(/^AI_API_KEY=.*/m, 'AI_API_KEY=' + ai_api_key);
-    }
-    if (ai_api_base_url) {
-      envContent = envContent.replace(/^AI_API_BASE_URL=.*/m, 'AI_API_BASE_URL=' + ai_api_base_url);
-    }
-    if (ai_model) {
-      envContent = envContent.replace(/^AI_MODEL=.*/m, 'AI_MODEL=' + ai_model);
-    }
-    if (port) {
-      envContent = envContent.replace(/^PORT=.*/m, 'PORT=' + port);
-    }
+    if (ai_api_key) envContent = envContent.replace(/^AI_API_KEY=.*/m, 'AI_API_KEY=' + ai_api_key);
+    if (ai_api_base_url) envContent = envContent.replace(/^AI_API_BASE_URL=.*/m, 'AI_API_BASE_URL=' + ai_api_base_url);
+    if (ai_model) envContent = envContent.replace(/^AI_MODEL=.*/m, 'AI_MODEL=' + ai_model);
+    if (port) envContent = envContent.replace(/^PORT=.*/m, 'PORT=' + port);
+    if (listener) envContent = envContent.replace(/^LISTENER=.*/m, '# LISTENER 是否允许局域网访问  127.0.0.1=仅本地  0.0.0.0=局域网可连\nLISTENER=' + listener);
 
     fs.writeFileSync(envPath, envContent, 'utf-8');
     res.json({ message: '配置已更新，重启服务后生效', path: envPath });

@@ -1913,6 +1913,10 @@
                     '<div class="cfg-item"><label>AI模型名称</label><input id="cfgModel" value="' + (cfg.ai_model || cfg.model || '') + '" placeholder="deepseek-default"></div>' +
                     '<div class="cfg-item"><label>API密钥</label><input id="cfgKey" value="' + (cfg.ai_api_key || localStorage.getItem('ai_key') || '') + '" placeholder="sk-..."></div>' +
                     '<div class="cfg-item"><label>后端端口</label><input id="cfgPort" value="' + (cfg.port || '7777') + '" placeholder="7777"></div>' +
+                    '<div class="cfg-item"><label>监听地址</label><select id="cfgListener" style="padding:8px;width:100%;border:1px solid var(--border-color);border-radius:6px;font-size:13px;background:var(--input-bg);color:var(--text-primary);">' +
+                    '<option value="127.0.0.1"' + (cfg.listener === '127.0.0.1' ? ' selected' : '') + '>127.0.0.1（仅本机）</option>' +
+                    '<option value="0.0.0.0"' + (cfg.listener === '0.0.0.0' ? ' selected' : '') + '>0.0.0.0（局域网）</option>' +
+                    '</select></div>' +
                     '</div>' +
                     '<div class="cfg-grid" style="margin-top:15px;">' +
                     '<div class="cfg-item" style="grid-column:span 2;"><label style="display:flex;align-items:center;gap:10px;cursor:pointer;">' +
@@ -2239,12 +2243,14 @@
             const url = document.getElementById('cfgUrl').value;
             const model = document.getElementById('cfgModel').value;
             const port = document.getElementById('cfgPort').value;
+            const listener = document.getElementById('cfgListener').value;
             try {
                 const res = await api('POST', '/api/config/update', {
                     ai_api_key: key || undefined,
                     ai_api_base_url: url || undefined,
                     ai_model: model || undefined,
-                    port: port || undefined
+                    port: port || undefined,
+                    listener: listener || undefined
                 });
                 toast('配置已保存到 .env 文件，点「重启服务」生效', '✅');
             } catch(e) {
