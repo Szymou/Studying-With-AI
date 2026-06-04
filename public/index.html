@@ -1324,9 +1324,13 @@
         async function loadSearch() {
             const c = document.getElementById('content');
             try {
-                // 加载当前领域题目的分类
-                const qs = await api('GET', '/api/questions?limit=200&domain=' + encodeURIComponent(currentDomain.code));
-                const cats = [...new Set(qs.map(q => q.category))];
+                // 加载当前领域题目的分类（系统题 + 自定义题）
+                const [sysQs, cusQs] = await Promise.all([
+                    api('GET', '/api/questions?limit=200&domain=' + encodeURIComponent(currentDomain.code)),
+                    api('GET', '/api/custom-questions?domain=' + encodeURIComponent(currentDomain.code))
+                ]);
+                const allQs = (sysQs || []).concat(cusQs || []);
+                const cats = [...new Set(allQs.map(q => q.category).filter(Boolean))];
                 _categories = cats;
                 c.innerHTML = '<h2>题目搜索</h2>' +
                     '<div style="background:var(--surface-secondary);padding:20px;border-radius:12px;border:1px solid var(--border-color);margin-bottom:20px;">' +
@@ -1346,7 +1350,11 @@
             const res = document.getElementById('searchRes');
             res.innerHTML = '<div class="loading">搜索中...</div>';
             try {
-                let qs = await api('GET', '/api/questions?limit=200&domain=' + encodeURIComponent(currentDomain.code));
+                const [sysRes, cusRes] = await Promise.all([
+                    api('GET', '/api/questions?limit=200&domain=' + encodeURIComponent(currentDomain.code)),
+                    api('GET', '/api/custom-questions?domain=' + encodeURIComponent(currentDomain.code))
+                ]);
+                let qs = (sysRes || []).concat(cusRes || []);
                 if (selectedCat !== 'all') {
                     qs = qs.filter(q => q.category === selectedCat);
                 }
