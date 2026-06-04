@@ -585,7 +585,7 @@ router.post('/generate-domain', async (req, res) => {
     // 1. 生成领域基本信息
     res.write('data: ' + JSON.stringify({ type: 'step', content: '🔍 AI正在分析领域信息...' }) + '\n\n');
 
-    const domainPrompt = `你是一位技术教育专家。请根据以下描述生成一个技术领域：\n${description}\n\n要求返回JSON格式：\n{\n  "code": "小写英文字母，唯一标识（如java）",\n  "name": "显示名称（如Java）",\n  "icon": "适合的emoji图标（最好是技术相关）",\n  "description": "该领域的简短描述（50-100字）"\n}\n\n只返回JSON，不要包含任何其他说明。`;
+    const domainPrompt = `你是一位教育专家。请根据以下描述生成一个知识领域：\n${description}\n\n要求返回JSON格式：\n{\n  "code": "小写英文字母，唯一标识",\n  "name": "显示名称",\n  "icon": "适合的emoji图标",\n  "description": "该领域的简短描述（50-100字）"\n}\n\n只返回JSON，不要包含任何其他说明。`;
     
     let domainInfo: any;
     try {
@@ -638,7 +638,7 @@ router.post('/generate-domain', async (req, res) => {
       const existingQ = await db.all('SELECT question FROM questions WHERE tech_domain = ? UNION SELECT question FROM custom_questions WHERE tech_domain = ?', [domainInfo.code, domainInfo.code]);
       const existingList = existingQ.map((r: any) => r.question).filter(Boolean).join('\n');
       const excludeHint = existingList ? `\n\n当前领域已有以下题目，请避免生成重复或高度相似的题目：\n${existingList}` : '';
-      const questionsPrompt = `你是一位${domainInfo.name}技术面试题专家。请生成${numQuestions}道${domainInfo.name}面试题。\n\n要求：\n1. 覆盖基础、进阶、高级难度\n2. 根据${domainInfo.name}领域的特点设计分类，分类要贴合该领域的技术栈\n3. 题目符合实际面试场景\n4. 答案简洁精炼，点到即止，不要代码示例\n5. 用大白话回答，别太正式，像在聊天一样\n\n返回JSON数组格式：\n[{"category":"分类名称","subcategory":"子分类（可选）","question":"问题","answer":"答案","difficulty":"easy|medium|hard","tags":"标签（多个用逗号分隔）"}]\n\n只返回JSON数组，不要包含任何其他说明。${excludeHint}`;
+      const questionsPrompt = `你是一位${domainInfo.name}教育专家。请生成${numQuestions}道${domainInfo.name}题目。\n\n要求：\n1. 覆盖不同难度等级\n2. 根据${domainInfo.name}领域的特点设计分类\n3. 题目要有实际价值\n4. 答案简洁精炼，点到即止\n5. 用大白话回答\n\n返回JSON数组格式：\n[{"category":"分类名称","subcategory":"子分类（可选）","question":"问题","answer":"答案","difficulty":"easy|medium|hard","tags":"标签（多个用逗号分隔）"}]\n\n只返回JSON数组，不要包含任何其他说明。${excludeHint}`;
 
       const response = await axios.post(
         AI_BASE_URL + '/chat/completions',
