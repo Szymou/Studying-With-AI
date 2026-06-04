@@ -64,7 +64,7 @@ router.post('/ask', authMiddleware, async (req, res) => {
     const systemPrompt = await getPrompt('ai_assistant');
     const userPrompt = userAnswer
         ? '问题：' + question + '\n用户的回答：' + userAnswer + '\n请评价是否正确，并给出标准答案（含代码示例）。'
-        : '问题：' + question + '\n请给出详细准确的答案，包含具体代码示例说明原理。';
+        : '问题：' + question + '\n。';
 
     try {
         let buffer = '';
