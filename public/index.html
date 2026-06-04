@@ -1513,8 +1513,14 @@
             const ml = document.getElementById('mList');
             const form = document.createElement('div'); form.id = 'aiGenForm'; form.className = 'question-card';
             // 加载分类
-            api('GET', '/api/questions?limit=500&domain=' + encodeURIComponent(currentDomain.code)).then(qs => {
-                const cats = [...new Set((qs||[]).map(q => q.category).filter(Boolean))].sort();
+            Promise.all([
+                api('GET', '/api/questions?limit=500&domain=' + encodeURIComponent(currentDomain.code)),
+                api('GET', '/api/custom-questions?domain=' + encodeURIComponent(currentDomain.code))
+            ]).then(([sysQs, cusQs]) => {
+                const cats = [...new Set([
+                    ...(sysQs||[]).map(q => q.category).filter(Boolean),
+                    ...(cusQs||[]).map(q => q.category).filter(Boolean)
+                ])].sort();
                 const sel = document.getElementById('genCat');
                 if (sel) sel.innerHTML = '<option value="">— 选择分类（可选）—</option>' +
                     cats.map(c => '<option value="' + c + '">' + c + '</option>').join('') +
@@ -1625,7 +1631,11 @@
 
             try {
                 // 获取当前领域所有题目
-                const allQs = await api('GET', '/api/questions?limit=500&domain=' + encodeURIComponent(currentDomain.code));
+                const [sysQs, cusQs] = await Promise.all([
+                    api('GET', '/api/questions?limit=500&domain=' + encodeURIComponent(currentDomain.code)),
+                    api('GET', '/api/custom-questions?domain=' + encodeURIComponent(currentDomain.code))
+                ]);
+                const allQs = (sysQs || []).concat(cusQs || []);
                 // 提取分类（至少出现 2 次以上的分类才考虑，去掉 "自定义" 类）
                 const catCount = {};
                 for (const q of allQs || []) {
