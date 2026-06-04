@@ -1,6 +1,22 @@
-# .gitignore
+# .gitignore 
 node_modules/
-dist/
-*.log
+dist/        
+*.log        
 .env
 .reasonix/
+
+# Temp folder
+temp/
+
+# Seed and test files
+seed-*.js
+add-200.js
+debug_api.js
+test-ai.js
+test-all.py
+test-api.sh
+import_seeds.js
+ui-server.js
+start-ui.*
+run.sh
+server*.log
