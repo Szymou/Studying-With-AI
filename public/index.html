@@ -1994,7 +1994,7 @@
                 '<div class="form-group"><label>领域代码（可选，自动生成）</label><input id="domainCode" placeholder="例如：react"></div>' +
                 '<div class="form-group"><label>图标（可选，自动推荐）</label><input id="domainIcon" placeholder="例如：⚛️"></div>' +
                 '<div class="form-group"><label>题目数量</label><input id="domainQuestions" type="number" value="5" min="5" max="100"></div>' +
-                '<div id="generateProgress" style="display:none;margin-top:10px;padding:10px;background:var(--surface-secondary);border-radius:6px;font-size:14px;"><div id="progressText"></div></div>' +
+                '<div id="generateProgress" style="display:none;margin-top:10px;padding:10px;background:var(--surface-secondary);border-radius:6px;font-size:14px;max-height:300px;overflow-y:auto;"><div id="progressText"></div></div>' +
                 '<div class="btn-group" style="margin-top:10px;">' +
                 '<button class="btn btn-primary" id="btnGenerateDomain" onclick="generateNewDomain()">✨ 开始生成</button></div>' +
                 '</div>' +
@@ -2193,9 +2193,7 @@
             btn.disabled = true;
             btn.textContent = '生成中...';
             progress.style.display = 'block';
-            const streamEl = document.getElementById('genDomainStream');
-            if (streamEl) { progressText.innerHTML = '🔍 分析领域信息...<br><small style="color:#94a3b8;" id="genDomainStream"></small>'; document.getElementById('genDomainStream').textContent = ''; }
-            else { progressText.innerHTML = '🔍 分析领域信息...'; }
+            progressText.innerHTML = '🔍 分析领域信息...<br><small style="color:#94a3b8;" id="genDomainStream"></small>';
 
             try {
                 const r = await fetch(API_BASE + '/api/ai/generate-domain', {
@@ -2229,11 +2227,7 @@
                         try {
                             const p = JSON.parse(d);
                             if (p.type === 'step') {
-                                if (document.getElementById('genDomainStream')) {
-                                    progressText.innerHTML = p.content + '<br><small style="color:#94a3b8;" id="genDomainStream"></small>';
-                                } else {
-                                    progressText.innerHTML = p.content;
-                                }
+                                progressText.innerHTML = p.content + '<br><small style="color:#94a3b8;" id="genDomainStream"></small>';
                             } else if (p.type === 'domain') {
                                 doneDomain = p.domain;
                             } else if (p.type === 'stream') {
