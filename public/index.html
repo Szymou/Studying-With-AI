@@ -182,6 +182,12 @@
             #domainsList { grid-template-columns: 1fr 1fr !important; }
             .code-copy-btn { padding: 2px 6px !important; font-size: 11px !important; }
             .hamburger { display: flex !important; }
+            /* AI 咨询移动端适配 */
+            .convo-list { display: none !important; }
+            .ai-chat-box { height: 55vh !important; }
+            .ai-chat-input { flex-wrap: wrap; gap: 4px !important; padding: 8px !important; }
+            .ai-chat-input input { min-width: 100%; }
+            #aiInp { font-size: 14px; }
         }
         .hamburger { display: none; position: fixed; top: 8px; left: 8px; z-index: 1000; background: #1a1a2e; color: #fff; border: none; border-radius: 6px; padding: 8px 12px; font-size: 20px; cursor: pointer; }
         .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 998; }
@@ -1788,7 +1794,7 @@
             const msgsHtml = messages.length
                 ? messages.map(m => '<div class="ai-msg ' + m.role + '"><div class="role">' + (m.role === 'user' ? '你' : 'AI') + '</div>' + renderMd(m.content) + '</div>').join('')
                 : '<div class="empty-state" style="padding:40px 20px;color:var(--text-secondary);"><div class="icon">💬</div><p>输入问题，AI为你解答</p></div>';
-            const convoListHtml = '<div style="width:220px;min-width:220px;border-right:1px solid var(--border-color);overflow-y:auto;padding:10px;background:var(--surface-secondary);">' +
+            const convoListHtml = '<div class="convo-list" style="width:220px;min-width:220px;border-right:1px solid var(--border-color);overflow-y:auto;padding:10px;background:var(--surface-secondary);">' +
                 '<button class="btn btn-ai" onclick="newChat()" style="width:100%;margin-bottom:10px;">+ 新对话</button>' +
                 (convos.length ? convos.map(cv => '<div class="convo-item"' + (cv.id === convoId ? ' active' : '') + '" onclick="switchChat(' + cv.id + ')">' + cv.title + '</div>').join('') : '<div style="color:var(--text-secondary);font-size:13px;text-align:center;">暂无记录</div>') +
                 '</div>';
