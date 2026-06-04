@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import { spawn } from 'child_process';
 import db from './db';
 import authRoutes from './routes/auth';
 import questionRoutes from './routes/questions';
@@ -35,7 +36,15 @@ app.get('/health', (req, res) => {
 // 重启服务端点（仅开发/管理用）
 app.post('/restart', (req, res) => {
   res.json({ message: '服务即将重启' });
-  setTimeout(() => { process.exit(0); }, 500);
+  setTimeout(() => {
+    const child = spawn(process.argv[0], process.argv.slice(1), {
+      cwd: process.cwd(),
+      stdio: 'inherit',
+      detached: true
+    });
+    child.unref();
+    process.exit(0);
+  }, 1000);
 });
 
 // 更新 .env 配置
