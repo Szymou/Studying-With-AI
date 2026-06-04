@@ -1988,7 +1988,8 @@
                 // 生成新领域表单
                 '<div style="margin-bottom:20px;padding:20px;border:1px solid var(--border-color);border-radius:10px;">' +
                 '<h3 style="margin-bottom:12px;">➕ 生成新领域</h3>' +
-                '<div class="form-group"><label>领域描述（必填）</label><textarea id="domainDescription" placeholder="例如：一个用于构建数据可视化的现代JavaScript库" style="height:80px;"></textarea></div>' +
+                '<div class="form-group"><label>领域描述（必填）</label><div style="position:relative;"><textarea id="domainDescription" placeholder="例如：一个用于构建数据可视化的现代JavaScript库" style="height:80px;"></textarea>' +
+                '<button class="btn btn-ai" id="btnAISuggest" onclick="aiSuggestDomain()" style="position:absolute;right:8px;bottom:8px;font-size:12px;padding:6px 12px;">🤖 AI建议</button></div></div>' +
                 '<div class="form-group"><label>领域名称（可选，自动生成）</label><input id="domainName" placeholder="例如：React"></div>' +
                 '<div class="form-group"><label>领域代码（可选，自动生成）</label><input id="domainCode" placeholder="例如：react"></div>' +
                 '<div class="form-group"><label>图标（可选，自动推荐）</label><input id="domainIcon" placeholder="例如：⚛️"></div>' +
