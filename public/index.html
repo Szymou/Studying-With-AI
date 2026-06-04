@@ -1023,6 +1023,9 @@
                 _aiDiscussions = [];
             }
             _selectedTab = -1;
+            // 恢复刷新按钮显示（可能被 AI评分 隐藏了）
+            const refreshBtn = document.getElementById('aiRefreshBtn');
+            if (refreshBtn) refreshBtn.style.display = '';
             // 记录AI访问（不再吞掉错误，让我们知道发生了什么！）
             try {
                 console.log('📝 尝试记录AI访问，题目ID:', qid, '领域:', currentDomain.code);
