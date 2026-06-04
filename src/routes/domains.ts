@@ -1,6 +1,7 @@
 ﻿﻿import express from 'express';
 import db from '../db';
 import { authMiddleware } from '../auth';
+import { PRESET_DOMAIN_CODES } from '../config';
 
 const router = express.Router();
 
@@ -48,8 +49,7 @@ router.delete('/:code', async (req, res) => {
       return res.status(404).json({ error: '领域不存在' });
     }
     // 不允许删除预设领域
-    const presetDomains = ['java', 'go', 'python', 'frontend', 'database', 'devops'];
-    if (presetDomains.includes(code.toLowerCase())) {
+    if (PRESET_DOMAIN_CODES.includes(code.toLowerCase())) {
       return res.status(400).json({ error: '不允许删除预设领域' });
     }
     // 删除领域关联的题目

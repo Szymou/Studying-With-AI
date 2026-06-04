@@ -4,6 +4,7 @@ import { authMiddleware } from '../auth';
 import axios from 'axios';
 import dotenv from 'dotenv';
 import { isDuplicateQuestion } from '../utils/similarity';
+import { DEFAULT_AI_PROMPTS } from '../config';
 
 dotenv.config();
 
@@ -37,12 +38,8 @@ const getPrompt = async (key: string, domainName = ''): Promise<string> => {
     }
   } catch (e) {}
   // 降级默认值
-  const defaults: Record<string, string> = {
-    ai_assistant: '你是一个全栈程序员，用大白话讲技术。回答要通俗易懂，多举生活中的例子，像朋友聊天一样自然，别拽术语。',
-    ai_generate: '你是一位{domain}技术面试出题老师，用大白话写答案。严格按照要求只输出JSON数组，不要其他内容。',
-    ai_error_analysis: '你是一个有耐心的技术导师。用大白话分析用户答错的原因。',
-  };
-  return (defaults[key] || '').replace('{domain}', domainName);
+  const fallback = DEFAULT_AI_PROMPTS.find(p => p.key === key);
+  return (fallback ? fallback.value : '').replace('{domain}', domainName);
 };
 
 // ============ AI 流式问答（SSE）- 供前端直接调用 ============

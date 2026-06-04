@@ -239,6 +239,10 @@
             <h2 id="aiModalTitle" style="cursor:move;user-select:none;" onmousedown="dragModalStart(event)">🤖 AI 助手</h2>
             <div id="aiModalQuestion" style="background:var(--surface-secondary);padding:10px 14px;border-radius:8px;margin-bottom:10px;font-size:14px;color:var(--text-primary);display:none;"></div>
             <div id="aiModalContent" style="line-height: 1.6;">AI思考中...</div>
+            <div id="aiDiscussArea" style="display:none;padding:10px 14px;border-top:1px solid var(--border-color);gap:8px;">
+                <input id="aiDiscussInp" placeholder="对此答案有疑问？追问讨论..." style="flex:1;padding:8px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;background:var(--input-bg);color:var(--text-primary);">
+                <button class="btn btn-ai" onclick="sendDiscuss()" style="font-size:13px;padding:6px 14px;">💬 讨论</button>
+            </div>
             <div class="modal-footer">
                 <button class="btn btn-fav" id="aiFavBtn" onclick="favCurrentQuestion()" style="display:none;">♡ 收藏本题</button>
                 <button class="btn" id="aiRefreshBtn" onclick="refreshAIAnswer()">🔄 刷新答案</button>
@@ -551,6 +555,9 @@
             document.getElementById('aiModal').style.display = 'flex';
             // 显示收藏按钮
             document.getElementById('aiFavBtn').style.display = currentAiQuestionId ? '' : 'none';
+            // 有内容时显示讨论区
+            const discussArea = document.getElementById('aiDiscussArea');
+            if (discussArea) discussArea.style.display = aiAnswers.length > 0 ? 'flex' : 'none';
             // 有内容时显示朗读按钮
             const speakBtn = document.getElementById('aiSpeakBtn');
             if (speakBtn) {
@@ -617,6 +624,48 @@
             window._dragData = null;
             document.removeEventListener('mousemove', dragModalMove);
             document.removeEventListener('mouseup', dragModalEnd);
+        }
+
+        // ---- AI 讨论 ----
+        async function sendDiscuss() {
+            const inp = document.getElementById('aiDiscussInp');
+            const msg = inp.value.trim();
+            if (!msg || !currentAiQuestionText) return;
+            inp.value = '';
+            const contentDiv = document.getElementById('aiModalContent');
+            const discussArea = document.getElementById('aiDiscussArea');
+            discussArea.style.display = 'none';
+            contentDiv.innerHTML += '<div style="margin-top:12px;padding:10px;background:var(--surface-secondary);border-radius:8px;"><div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">💬 你的追问：' + msg + '</div><div id="aiDiscussResp"><span class="loading">AI 思考中...</span></div></div>';
+            contentDiv.scrollTop = contentDiv.scrollHeight;
+            try {
+                const ctx = aiAnswers.length ? aiAnswers[aiAnswers.length - 1].text : '';
+                const r = await fetch(API_BASE + '/api/ai/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ question: currentAiQuestionText + '\n\n已有答案：' + ctx + '\n\n用户的追问：' + msg, tech_domain: currentDomain.code })
+                });
+                if (!r.ok) throw new Error('请求失败');
+                const reader = r.body.getReader();
+                const dec = new TextDecoder();
+                let full = '', buf = '', first = true;
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buf += dec.decode(value, { stream: true });
+                    for (const ln of buf.split('\n')) {
+                        const s = ln.trim();
+                        if (!s.startsWith('data: ')) continue;
+                        const d = s.slice(6).trim();
+                        if (d === '[DONE]') continue;
+                        try { const p = JSON.parse(d); if (p.content) { full += p.content; if (first) { document.getElementById('aiDiscussResp').innerHTML = ''; first = false; } document.getElementById('aiDiscussResp').innerHTML = renderMd(full); } } catch(e) {}
+                    }
+                    buf = '';
+                }
+                discussArea.style.display = 'flex';
+            } catch(e) {
+                document.getElementById('aiDiscussResp').innerHTML = '⚠️ ' + e.message;
+                discussArea.style.display = 'flex';
+            }
         }
 
         function closeAiModal() {
@@ -902,7 +951,17 @@
                             if (p.content) {
                                 full += p.content;
                                 if (first) { openAiModal('', false); first = false; }
-                                document.getElementById('aiModalContent').innerHTML = renderMd(full);
+                                // 流式输出时保留已有 Tab + 当前流式内容
+                                let streamHtml = '';
+                                if (aiAnswers.length > 0) {
+                                    const tabs = aiAnswers.map((a, i) =>
+                                        '<span class="ans-tab' + (i === aiAnswers.length - 1 ? ' active' : '') + '" onclick="switchAiTab(' + i + ')">答案' + (i + 1) + '</span>'
+                                    ).join('');
+                                    streamHtml = '<div class="ans-tabs">' + tabs + '<span class="ans-tab active">答案' + (aiAnswers.length + 1) + '（生成中）</span></div><div>' + renderMd(full) + '</div>';
+                                } else {
+                                    streamHtml = renderMd(full);
+                                }
+                                document.getElementById('aiModalContent').innerHTML = streamHtml;
                                 const hasContent = !!full;
                                 document.getElementById('aiSpeakBtn').style.display = hasContent ? '' : 'none';
                                 // 朗读按钮已由 display 逻辑自动控制
@@ -1002,7 +1061,8 @@
                     div.innerHTML = '<div><span class="question-category">' + q.category + (q.subcategory?' - '+q.subcategory:'') + domainTag + '</span><span class="question-title">' + q.question + '</span></div>' +
                         (hideInp ? '' : '<input class="answer-input" id="a-' + q.id + '" placeholder="输入你的答案">' +
                         '<div class="btn-group">' +
-                        '<button class="btn btn-primary" onclick="submitAns(' + q.id + ')">提交答案</button>') +
+                        '<button class="btn btn-primary" onclick="submitAns(' + q.id + ')">提交答案</button>' +
+                        '<button class="btn btn-ai" onclick="aiScore(' + q.id + ')" style="margin-left:4px;">🤖 AI评分</button>') +
                         (hideInp ? '<div class="btn-group">' : '') +
                         '<button class="btn btn-ai" onclick="askAI(' + q.id + ',\'' + q.question.replace(/'/g,"\\'") + '\')">🤖 AI</button>' +
                         '<button class="btn btn-fav" id="fb-' + q.id + '" onclick="toggleFav(' + q.id + ',this)">♡ 收藏</button></div>' +
@@ -1567,6 +1627,41 @@
                 if (btn2) btn2.disabled = false;
                 const genBtn = document.querySelector('#aiGenForm .btn-ai');
                 if (genBtn) genBtn.disabled = false;
+            }
+        }
+
+        // ---- AI 评分助手 ----
+        async function aiScore(qid) {
+            const a = document.getElementById('a-' + qid).value;
+            if (!a) { toast('请先输入答案', '✏️'); return; }
+            const r = document.getElementById('r-' + qid);
+            const questionText = document.querySelector('#qc-' + qid + ' .question-title')?.textContent || '';
+            r.className = 'result';
+            r.innerHTML = '<span class="loading">🤖 AI 评分中...</span>';
+            try {
+                const reader = (await fetch(API_BASE + '/api/ai/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ question: questionText, userAnswer: a, tech_domain: currentDomain.code })
+                })).body.getReader();
+                const dec = new TextDecoder();
+                let full = '', buf = '';
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buf += dec.decode(value, { stream: true });
+                    for (const ln of buf.split('\n')) {
+                        const s = ln.trim();
+                        if (!s.startsWith('data: ')) continue;
+                        const d = s.slice(6).trim();
+                        if (d === '[DONE]') continue;
+                        try { const p = JSON.parse(d); if (p.content) full += p.content; } catch(e) {}
+                    }
+                    buf = '';
+                }
+                r.innerHTML = full ? renderMd(full) : '⚠️ 评分失败';
+            } catch(e) {
+                r.innerHTML = '❌ 评分失败：' + e.message;
             }
         }
 
