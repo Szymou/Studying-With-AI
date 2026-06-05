@@ -1559,7 +1559,7 @@
                 '<div class="form-group" id="genCustomGroup" style="display:none;"><label>自定义主题</label><input id="genTopic" placeholder="例如：JVM垃圾回收" style="width:100%;"></div>' +
                 '<div class="form-group"><label>数量（1-20）</label><input id="genCount" value="5" style="width:100px;"></div>' +
                 '<div class="btn-group">' +
-                '<button class="btn btn-ai" onclick="doAIGenerate()">✨ 生成</button>' +
+                '<button class="btn btn-ai" id="btnGenerate" onclick="doAIGenerate()" style="display:none;">✨ 生成</button>' +
                 '<button class="btn btn-success" id="btnAutoExpand" onclick="doAIAutoExpand()">📈 自动扩充</button>' +
                 '<button class="btn" onclick="this.parentElement.parentElement.remove()">取消</button></div>' +
                 '<div id="genResult" style="margin-top:10px;"></div>';
@@ -1610,7 +1610,7 @@
                                     cats.map(c => '<option value="' + c + '">' + c + '</option>').join('') +
                                     '<option value="__custom__">✏️ 自定义主题</option>';
                                 btn.style.display = 'none';
-                                document.getElementById('btnAutoExpand').style.display = '';
+                                onGenCatChange();
                                 toast('✅ 已生成 ' + cats.length + ' 个分类', '🎯');
                             }
                         } else {
@@ -1628,6 +1628,10 @@
         function onGenCatChange() {
             const v = document.getElementById('genCat').value;
             document.getElementById('genCustomGroup').style.display = v === '__custom__' ? '' : 'none';
+            // 选了分类 → 显示"生成"按钮，隐藏"自动扩充"
+            const hasCat = v && v !== '__custom__';
+            document.getElementById('btnGenerate').style.display = hasCat ? '' : 'none';
+            document.getElementById('btnAutoExpand').style.display = hasCat ? 'none' : '';
         }
 
         let _generating = false;
@@ -1759,6 +1763,7 @@
                                 sel.innerHTML = '<option value="">— 选择分类 —</option>' +
                                     generatedCats.map(c => '<option value="' + c + '">' + c + '</option>').join('') +
                                     '<option value="__custom__">✏️ 自定义主题</option>';
+                                onGenCatChange();
                             }
                             res.innerHTML = '<div style="color:#38a169;">✅ AI生成了 ' + generatedCats.length + ' 个分类，继续扩充题目...</div>';
                             // 使用生成的分类
