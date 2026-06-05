@@ -11,7 +11,7 @@ router.use(authMiddleware);
 router.get('/', async (req, res) => {
   try {
     const { category, subcategory, difficulty, domain, limit = 50, offset = 0 } = req.query;
-    let sql = `SELECT id, category, subcategory, question, difficulty, tags, tech_domain, 'system' as source FROM questions WHERE 1=1`;
+    let sql = `SELECT id, category, subcategory, question, difficulty, tags, tech_domain, question_type, options, 'system' as source FROM questions WHERE 1=1`;
     const params: any[] = [];
 
     if (category) {
@@ -46,7 +46,7 @@ router.get('/random/:count', async (req, res) => {
   try {
     const count = Math.min(parseInt(req.params.count) || 10, 50);
     const { domain } = req.query;
-    let sSql = `SELECT id, category, subcategory, question, difficulty, tags, tech_domain, 'system' as source FROM questions`;
+    let sSql = `SELECT id, category, subcategory, question, difficulty, tags, tech_domain, question_type, options, 'system' as source FROM questions`;
     let cSql = `SELECT id, category, subcategory, question, NULL as difficulty, tags, tech_domain, 'custom' as source FROM custom_questions`;
     const params: any[] = [];
     if (domain) {
@@ -67,7 +67,7 @@ router.get('/random/:count', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const question = await db.get(`
-      SELECT id, category, subcategory, question, answer, difficulty, tags, tech_domain
+      SELECT id, category, subcategory, question, answer, difficulty, tags, tech_domain, question_type, options
       FROM questions WHERE id = ?
     `, [req.params.id]);
     if (!question) {
@@ -86,12 +86,31 @@ router.post('/:id/answer', async (req, res) => {
     const userId = req.user.userId;
     const questionId = parseInt(req.params.id);
 
-    const question = await db.get('SELECT answer, tech_domain FROM questions WHERE id = ?', [questionId]);
+    const question = await db.get('SELECT answer, tech_domain, question_type, options FROM questions WHERE id = ?', [questionId]);
     if (!question) {
       return res.status(404).json({ error: '题目不存在' });
     }
 
-    const isCorrect = userAnswer && userAnswer.trim().toLowerCase() === question.answer.trim().toLowerCase();
+    let isCorrect: boolean;
+    let correctAnswerText = question.answer;
+    if (question.question_type === 'choice') {
+      // 选择题：比较选项字母（不区分大小写）
+      const selected = (userAnswer || '').trim().toUpperCase();
+      const correct = question.answer.trim().toUpperCase();
+      isCorrect = selected === correct;
+      // 获取选项文本
+      try {
+        const opts = JSON.parse(question.options || '[]');
+        const idx = 'ABCD'.indexOf(correct);
+        if (idx >= 0 && opts[idx]) {
+          const optText = opts[idx].replace(/^[A-D][\)\.]\s*/, '');
+          correctAnswerText = correct + ') ' + optText;
+        }
+      } catch(e) {}
+    } else {
+      // 填空题：关键词匹配
+      isCorrect = userAnswer && userAnswer.trim().toLowerCase() === question.answer.trim().toLowerCase();
+    }
 
     // 查询上一次的 SM-2 参数
     const lastProgress = await db.get(
@@ -119,7 +138,7 @@ router.post('/:id/answer', async (req, res) => {
        sm2Result?.nextReviewAt || null]
     );
 
-    res.json({ isCorrect, correctAnswer: question.answer, sm2: sm2Result });
+    res.json({ isCorrect, correctAnswer: correctAnswerText, sm2: sm2Result });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: '提交答案失败' });

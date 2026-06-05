@@ -117,6 +117,11 @@ export const initDb = async () => {
   try { await run(`ALTER TABLE questions ADD COLUMN tech_domain TEXT`); } catch(e) {}
   try { await run(`ALTER TABLE custom_questions ADD COLUMN tech_domain TEXT`); } catch(e) {}
   try { await run(`ALTER TABLE favorites ADD COLUMN tech_domain TEXT`); } catch(e) {}
+  // 选择题支持
+  try { await run(`ALTER TABLE questions ADD COLUMN question_type TEXT DEFAULT 'fill'`); } catch(e) {}
+  try { await run(`ALTER TABLE questions ADD COLUMN options TEXT`); } catch(e) {}
+  try { await run(`ALTER TABLE custom_questions ADD COLUMN question_type TEXT DEFAULT 'fill'`); } catch(e) {}
+  try { await run(`ALTER TABLE custom_questions ADD COLUMN options TEXT`); } catch(e) {}
 
   // AI 提示词配置表
   try { await run(`CREATE TABLE IF NOT EXISTS ai_prompts (
@@ -132,12 +137,11 @@ export const initDb = async () => {
     }
   }
 
-  // 种子题目：仅当没有新领域题目时执行
-  const newDomainCount = await get("SELECT COUNT(*) as count FROM questions WHERE tech_domain IN ('it-tech','general','car','gaokao')");
-  if (!newDomainCount.count) {
-    // 清除旧的 java 领域题目
+  // 种子题目：缺失时执行
+  const hasNewQs = await get("SELECT COUNT(*) as count FROM questions WHERE tech_domain IN ('it-tech','general','car','gaokao')");
+  const hasChoiceQs = await get("SELECT COUNT(*) as count FROM questions WHERE question_type = 'choice'");
+  if (!hasNewQs.count || !hasChoiceQs.count) {
     await run("DELETE FROM questions WHERE tech_domain IN ('java','go','python','frontend','database','devops')");
-    // 清除旧的 tech_domain 为 NULL 的题目
     await run("DELETE FROM questions WHERE tech_domain IS NULL");
     await seedSampleQuestions();
   }
@@ -178,7 +182,7 @@ export const initDb = async () => {
 };
 
 const seedSampleQuestions = async () => {
-  const questions: [string, string, string, string, string][] = [
+  const questions: any[] = [
     // ==================== 💻 IT技术 - 编程基础 (15题) ====================
     ['it-tech', '编程基础', '变量', '什么是变量？', '变量是程序中用来存储数据的容器。每个变量有类型和名字，就像贴了标签的盒子可以放对应的数据。'],
     ['it-tech', '编程基础', '数据类型', '常见的基本数据类型有哪些？', '整数型（int/long）、浮点型（float/double）、字符型（char）、布尔型（boolean）。不同数据类型占用的内存大小不同。'],
@@ -398,14 +402,94 @@ const seedSampleQuestions = async () => {
     ['gaokao', '英语', '写作', '英语书信的格式？', '称呼（Dear xxx,）、正文（分段，开头I\'m writing to...）、结束语（Yours sincerely/Love,）、签名。商务用Sincerely，朋友用Best regards。'],
     ['gaokao', '英语', '写作', '作文中常用的连接词？', '并列（and/also）、转折（but/however）、递进（besides/moreover）、因果（therefore/as a result）、举例（for example/such as）。'],
     ['gaokao', '英语', '写作', '高分作文的技巧？', '复杂结构（定语从句、倒装句、强调句）、高级词汇（important→significant, good→excellent）、恰当谚语、字迹工整。'],
-    ['gaokao', '英语', '听力', '听力提高的方法？', '精听（逐句听写）、泛听（VOA/BBC当背景音）、跟读（模仿语音语调）、多做真题。注意连读（not at all→noda-tall）和弱读。']
+    ['gaokao', '英语', '听力', '听力提高的方法？', '精听（逐句听写）、泛听（VOA/BBC当背景音）、跟读（模仿语音语调）、多做真题。注意连读（not at all→noda-tall）和弱读。'],
+
+    // ==================== 💻 IT技术 - 选择题 (20题) ====================
+    ['it-tech', '编程基础', '选择题', '以下哪个是面向对象编程的特性？', 'C', 'medium', 'choice', '["A) 顺序执行","B) 函数式编程","C) 封装继承多态","D) 面向过程"]'],
+    ['it-tech', '编程基础', '选择题', '数组的索引从几开始？', 'A', 'medium', 'choice', '["A) 0","B) 1","C) -1","D) 随机"]'],
+    ['it-tech', '编程基础', '选择题', '以下哪种循环至少执行一次？', 'B', 'medium', 'choice', '["A) for循环","B) do-while循环","C) while循环","D) 以上都是"]'],
+    ['it-tech', '编程基础', '选择题', '函数参数传递的两种方式？', 'D', 'medium', 'choice', '["A) 引用和指针","B) 深拷贝和浅拷贝","C) 同步和异步","D) 值传递和引用传递"]'],
+    ['it-tech', '编程基础', '选择题', '以下哪个不是基本数据类型？', 'C', 'medium', 'choice', '["A) int","B) boolean","C) String","D) float"]'],
+    ['it-tech', '计算机网络', '选择题', 'HTTP默认端口是多少？', 'B', 'medium', 'choice', '["A) 443","B) 80","C) 8080","D) 21"]'],
+    ['it-tech', '计算机网络', '选择题', '以下哪个协议是面向连接的？', 'A', 'medium', 'choice', '["A) TCP","B) UDP","C) HTTP","D) DNS"]'],
+    ['it-tech', '计算机网络', '选择题', 'IP地址中IPv4有多少位？', 'C', 'medium', 'choice', '["A) 8位","B) 16位","C) 32位","D) 128位"]'],
+    ['it-tech', '计算机网络', '选择题', 'DNS的作用是什么？', 'B', 'medium', 'choice', '["A) 分配IP地址","B) 域名解析为IP","C) 加密数据传输","D) 路由数据包"]'],
+    ['it-tech', '计算机网络', '选择题', '以下哪个是HTTPS使用的加密协议？', 'D', 'medium', 'choice', '["A) HTTP","B) FTP","C) SMTP","D) SSL/TLS"]'],
+    ['it-tech', '数据结构', '选择题', '栈的特点是？', 'A', 'medium', 'choice', '["A) 先进后出","B) 先进先出","C) 随机存取","D) 双端存取"]'],
+    ['it-tech', '数据结构', '选择题', '链表相比数组的优势是？', 'C', 'medium', 'choice', '["A) 随机访问快","B) 内存连续","C) 插入删除快","D) 查找更快"]'],
+    ['it-tech', '数据结构', '选择题', '二叉树的遍历方式不包括？', 'D', 'medium', 'choice', '["A) 前序遍历","B) 中序遍历","C) 后序遍历","D) 环序遍历"]'],
+    ['it-tech', '数据结构', '选择题', '哈希表的时间复杂度（平均）？', 'A', 'medium', 'choice', '["A) O(1)","B) O(n)","C) O(log n)","D) O(n²)"]'],
+    ['it-tech', '数据结构', '选择题', '队列适合什么场景？', 'B', 'medium', 'choice', '["A) 递归调用","B) 任务排队","C) 括号匹配","D) 表达式求值"]'],
+    ['it-tech', '操作系统', '选择题', '进程和线程的区别？', 'D', 'medium', 'choice', '["A) 进程是轻量级线程","B) 线程拥有独立内存","C) 进程间不能通信","D) 线程共享进程资源"]'],
+    ['it-tech', '操作系统', '选择题', '虚拟内存的作用？', 'A', 'medium', 'choice', '["A) 扩大可用内存空间","B) 提高CPU速度","C) 替代物理内存","D) 管理网络连接"]'],
+    ['it-tech', '操作系统', '选择题', '死锁的四个必要条件不包括？', 'C', 'medium', 'choice', '["A) 互斥条件","B) 请求与保持","C) 并发执行","D) 循环等待"]'],
+    ['it-tech', '操作系统', '选择题', '以下哪个是进程调度算法？', 'B', 'medium', 'choice', '["A) LRU","B) 时间片轮转","C) LFU","D) FIFO"]'],
+    ['it-tech', '操作系统', '选择题', '中断的作用？', 'D', 'medium', 'choice', '["A) 关机","B) 重启","C) 降低CPU频率","D) CPU响应外部事件"]'],
+
+    // ==================== 📚 通用知识 - 选择题 (20题) ====================
+    ['general', '历史文化', '选择题', '中国的四大发明不包括？', 'D', 'medium', 'choice', '["A) 造纸术","B) 火药","C) 指南针","D) 瓷器"]'],
+    ['general', '历史文化', '选择题', '第二次世界大战的起止年份？', 'B', 'medium', 'choice', '["A) 1914-1918","B) 1939-1945","C) 1945-1950","D) 1937-1945"]'],
+    ['general', '历史文化', '选择题', '唐朝的开国皇帝是谁？', 'A', 'medium', 'choice', '["A) 李渊","B) 李世民","C) 武则天","D) 李隆基"]'],
+    ['general', '历史文化', '选择题', '文艺复兴发源于哪个国家？', 'B', 'medium', 'choice', '["A) 法国","B) 意大利","C) 英国","D) 德国"]'],
+    ['general', '历史文化', '选择题', '《红楼梦》的作者是谁？', 'C', 'medium', 'choice', '["A) 罗贯中","B) 吴承恩","C) 曹雪芹","D) 施耐庵"]'],
+    ['general', '地理科学', '选择题', '地球上最大的大洋是？', 'A', 'medium', 'choice', '["A) 太平洋","B) 大西洋","C) 印度洋","D) 北冰洋"]'],
+    ['general', '地理科学', '选择题', '中国的最高峰是？', 'C', 'medium', 'choice', '["A) 黄山","B) 泰山","C) 珠穆朗玛峰","D) 华山"]'],
+    ['general', '地理科学', '选择题', '以下哪个是温室气体？', 'D', 'medium', 'choice', '["A) 氧气","B) 氮气","C) 氢气","D) 二氧化碳"]'],
+    ['general', '地理科学', '选择题', '地球的自转周期大约是？', 'B', 'medium', 'choice', '["A) 12小时","B) 24小时","C) 365天","D) 7天"]'],
+    ['general', '地理科学', '选择题', '赤道的纬度是多少？', 'A', 'medium', 'choice', '["A) 0度","B) 23.5度","C) 90度","D) 45度"]'],
+    ['general', '生活常识', '选择题', '人体最大的器官是？', 'C', 'medium', 'choice', '["A) 心脏","B) 肝脏","C) 皮肤","D) 大脑"]'],
+    ['general', '生活常识', '选择题', '水的沸点在标准大气压下是多少？', 'B', 'medium', 'choice', '["A) 0°C","B) 100°C","C) 50°C","D) 212°C"]'],
+    ['general', '生活常识', '选择题', '以下哪种维生素可以通过晒太阳获取？', 'D', 'medium', 'choice', '["A) 维生素A","B) 维生素B","C) 维生素C","D) 维生素D"]'],
+    ['general', '生活常识', '选择题', '光在真空中的速度？', 'A', 'medium', 'choice', '["A) 3×10⁸ m/s","B) 3×10⁶ m/s","C) 3×10¹⁰ m/s","D) 3×10⁴ m/s"]'],
+    ['general', '生活常识', '选择题', '人体正常体温约多少？', 'B', 'medium', 'choice', '["A) 35°C","B) 36-37°C","C) 38-39°C","D) 40°C"]'],
+
+    // ==================== 🚗 汽车 - 选择题 (20题) ====================
+    ['car', '汽车构造', '选择题', '汽车发动机的四个冲程顺序？', 'A', 'medium', 'choice', '["A) 吸气-压缩-做功-排气","B) 压缩-吸气-做功-排气","C) 做功-吸气-压缩-排气","D) 排气-压缩-做功-吸气"]'],
+    ['car', '汽车构造', '选择题', '涡轮增压的作用？', 'C', 'medium', 'choice', '["A) 降低油耗","B) 减少排放","C) 增加进气量提升功率","D) 降低噪音"]'],
+    ['car', '汽车构造', '选择题', 'AT变速箱中的"AT"代表？', 'B', 'medium', 'choice', '["A) Auto Transmission","B) Automatic Transmission","C) Advanced Transmission","D) All Terrain"]'],
+    ['car', '汽车构造', '选择题', '以下哪个不是悬挂系统的类型？', 'D', 'medium', 'choice', '["A) 麦弗逊式","B) 双叉臂式","C) 多连杆式","D) 涡轮式"]'],
+    ['car', '汽车构造', '选择题', 'ESP的中文名称是？', 'B', 'medium', 'choice', '["A) 防抱死系统","B) 电子稳定程序","C) 牵引力控制","D) 制动辅助"]'],
+    ['car', '驾驶知识', '选择题', '高速公路最高限速一般是多少？', 'C', 'medium', 'choice', '["A) 80km/h","B) 100km/h","C) 120km/h","D) 140km/h"]'],
+    ['car', '驾驶知识', '选择题', '以下哪个标志表示禁止停车？', 'A', 'medium', 'choice', '["A) 红圈蓝底X","B) 红圈斜杠","C) 黄底黑字","D) 蓝底白字"]'],
+    ['car', '驾驶知识', '选择题', '安全气囊的触发条件？', 'D', 'medium', 'choice', '["A) 任何碰撞","B) 车速超过30km/h","C) 刹车时","D) 一定程度的正面碰撞"]'],
+    ['car', '驾驶知识', '选择题', 'ABS的作用是？', 'B', 'medium', 'choice', '["A) 加速辅助","B) 防止刹车抱死","C) 自动刹车","D) 电子差速锁"]'],
+    ['car', '驾驶知识', '选择题', '夜间会车应使用什么灯光？', 'C', 'medium', 'choice', '["A) 远光灯","B) 雾灯","C) 近光灯","D) 双闪灯"]'],
+    ['car', '品牌文化', '选择题', '丰田的混动技术叫什么？', 'A', 'medium', 'choice', '["A) THS","B) e-Power","C) i-MMD","D) DM-i"]'],
+    ['car', '品牌文化', '选择题', '宝马的经典直列六缸发动机代号？', 'B', 'medium', 'choice', '["A) B58","B) N55","C) S63","D) M54"]'],
+    ['car', '品牌文化', '选择题', '特斯拉的创始人是谁？', 'D', 'medium', 'choice', '["A) 马斯克","B) 斯特劳贝尔","C) 艾伯哈德","D) 艾伯哈德和塔彭宁"]'],
+    ['car', '品牌文化', '选择题', '以下哪个是中国本土汽车品牌？', 'C', 'medium', 'choice', '["A) 丰田","B) 现代","C) 比亚迪","D) 大众"]'],
+    ['car', '品牌文化', '选择题', 'F1比赛中使用的轮胎品牌？', 'A', 'medium', 'choice', '["A) 倍耐力","B) 米其林","C) 普利司通","D) 固特异"]'],
+
+    // ==================== 🎓 高考复习 - 选择题 (20题) ====================
+    ['gaokao', '数学', '选择题', 'sin(90°)等于多少？', 'B', 'medium', 'choice', '["A) 0","B) 1","C) -1","D) 0.5"]'],
+    ['gaokao', '数学', '选择题', '一元二次方程ax²+bx+c=0的判别式是？', 'A', 'medium', 'choice', '["A) b²-4ac","B) b²+4ac","C) √(b²-4ac)","D) 4ac-b²"]'],
+    ['gaokao', '数学', '选择题', '圆的面积公式是？', 'C', 'medium', 'choice', '["A) 2πr","B) πd","C) πr²","D) 2πr²"]'],
+    ['gaokao', '数学', '选择题', '复数i²等于？', 'B', 'medium', 'choice', '["A) 1","B) -1","C) i","D) -i"]'],
+    ['gaokao', '数学', '选择题', '等差数列的通项公式？', 'D', 'medium', 'choice', '["A) an=a1+(n+1)d","B) an=a1×qⁿ","C) an=a1+qⁿ","D) an=a1+(n-1)d"]'],
+    ['gaokao', '语文', '选择题', '"床前明月光"的下一句是？', 'A', 'medium', 'choice', '["A) 疑是地上霜","B) 举头望明月","C) 低头思故乡","D) 月是故乡明"]'],
+    ['gaokao', '语文', '选择题', '鲁迅的《狂人日记》发表于哪年？', 'C', 'medium', 'choice', '["A) 1915年","B) 1917年","C) 1918年","D) 1921年"]'],
+    ['gaokao', '语文', '选择题', '以下哪个不是老舍的作品？', 'D', 'medium', 'choice', '["A) 骆驼祥子","B) 茶馆","C) 四世同堂","D) 家"]'],
+    ['gaokao', '语文', '选择题', '"但愿人长久，千里共婵娟"的作者？', 'B', 'medium', 'choice', '["A) 李白","B) 苏轼","C) 杜甫","D) 白居易"]'],
+    ['gaokao', '语文', '选择题', '以下哪个成语与项羽有关？', 'A', 'medium', 'choice', '["A) 破釜沉舟","B) 卧薪尝胆","C) 负荆请罪","D) 完璧归赵"]'],
+    ['gaokao', '英语', '选择题', '"I have finished my homework"是什么时态？', 'C', 'medium', 'choice', '["A) 一般过去时","B) 一般将来时","C) 现在完成时","D) 过去完成时"]'],
+    ['gaokao', '英语', '选择题', '以下哪个是"苹果"的英文？', 'A', 'medium', 'choice', '["A) apple","B) banana","C) orange","D) grape"]'],
+    ['gaokao', '英语', '选择题', '"She is taller than me"中"taller"是？', 'B', 'medium', 'choice', '["A) 原级","B) 比较级","C) 最高级","D) 同级比较"]'],
+    ['gaokao', '英语', '选择题', '"They were playing football at 5pm"的时态？', 'D', 'medium', 'choice', '["A) 一般过去时","B) 现在进行时","C) 过去完成时","D) 过去进行时"]'],
+    ['gaokao', '英语', '选择题', '以下哪个是"努力"的形容词？', 'C', 'medium', 'choice', '["A) hardly","B) harden","C) hardworking","D) hardship"]']
   ];
 
   for (const q of questions) {
-    await run(`
-      INSERT INTO questions (tech_domain, category, subcategory, question, answer, difficulty)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, [q[0], q[1], q[2], q[3], q[4], 'medium']);
+    if (q.length >= 7) {
+      await run(`
+        INSERT INTO questions (tech_domain, category, subcategory, question, answer, difficulty, question_type, options)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `, [q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7]]);
+    } else {
+      await run(`
+        INSERT INTO questions (tech_domain, category, subcategory, question, answer, difficulty)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [q[0], q[1], q[2], q[3], q[4], 'medium']);
+    }
   }
 };
 

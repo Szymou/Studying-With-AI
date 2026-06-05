@@ -69,7 +69,7 @@
         .header { background: var(--surface); border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow); display: flex; justify-content: space-between; align-items: center; }
         .logo { font-size: 24px; font-weight: bold; color: #667eea; }
         .user-info { display: flex; gap: 15px; align-items: center; color: var(--text-primary); }
-        .btn { padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; transition: all 0.3s; background: #e2e8f0; color: #2d3748; }
+        .btn { padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; transition: all 0.3s; background: #e2e8f0; color: #2d3748; white-space: nowrap; }
         .btn-primary { background: #667eea; color: white; }
         .btn-primary:hover { background: #5a67d8; }
         .btn-danger { background: #e53e3e; color: white; }
@@ -101,7 +101,7 @@
         .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: var(--text-primary); }
         .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--input-bg); color: var(--text-primary); }
         .loading { text-align: center; padding: 40px; color: var(--text-secondary); }
-        .btn-group { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; flex-wrap: nowrap; }
         .modal-footer { display: flex; gap: 10px; margin-top: 15px; justify-content: flex-end; border-top: 1px solid var(--border-color); padding-top: 15px; }
         #aiModalContent { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 14px; background: var(--markdown-bg); border-radius: 8px; word-break: break-word; }
         #aiModalContent pre { overflow-x: auto; white-space: pre-wrap; word-break: break-word; max-width: 100%; }
@@ -1102,8 +1102,9 @@
 
         // ---- 练习 ----
         async function loadPractice() {
+            if (!currentDomain) { document.getElementById('content').innerHTML = '<div class="empty-state"><div class="icon">📚</div><h3>请先选择一个领域</h3></div>'; return; }
             const c = document.getElementById('content');
-            if (window._prac && c.innerHTML.trim()) { c.innerHTML = window._prac; document.querySelectorAll('.btn-fav').forEach(b => { const id = b.id.replace('fb-',''); if(id) checkFav(+id, b); }); return; }
+            if (window._prac && c && c.innerHTML.trim()) { c.innerHTML = window._prac; document.querySelectorAll('.btn-fav').forEach(b => { const id = b.id.replace('fb-',''); if(id) checkFav(+id, b); }); return; }
             c.innerHTML = '<div class="loading">加载中...</div>';
             try {
                 const domainParam = _interleaveMode ? '' : '&domain=' + encodeURIComponent(currentDomain.code);
@@ -1130,15 +1131,28 @@
                 for (const q of qs) {
                     const div = document.createElement('div'); div.className = 'question-card'; div.id = 'qc-' + q.id;
                     const domainTag = _interleaveMode && q.tech_domain ? ' [' + q.tech_domain + ']' : '';
-                    div.innerHTML = '<div><span class="question-category">' + q.category + (q.subcategory?' - '+q.subcategory:'') + domainTag + '</span><span class="question-title">' + q.question + '</span></div>' +
-                        (hideInp ? '' : '<input class="answer-input" id="a-' + q.id + '" placeholder="输入你的答案">' +
-                        '<div class="btn-group">' +
-                        '<button class="btn btn-primary" onclick="submitAns(' + q.id + ')">提交答案</button>' +
-                        '<button class="btn btn-ai" onclick="aiScore(' + q.id + ')" style="margin-left:4px;">🤖 AI评分</button>') +
-                        (hideInp ? '<div class="btn-group">' : '') +
-                        '<button class="btn btn-ai" onclick="askAI(' + q.id + ',\'' + q.question.replace(/'/g,"\\'") + '\')">🤖 AI</button>' +
+                    const isChoice = q.question_type === 'choice';
+                    let opts = [];
+                    if (isChoice && q.options) { try { opts = JSON.parse(q.options); } catch(e) {} }
+                    let qHtml = '<div><span class="question-category">' + q.category + (q.subcategory?' - '+q.subcategory:'') + domainTag + '</span><span class="question-title">' + q.question + '</span></div>';
+                    if (isChoice) {
+                        qHtml += '<div class="choice-group" id="cg-' + q.id + '">' + opts.map((o,i) =>
+                            '<label class="choice-item" style="display:block;padding:6px 10px;margin:4px 0;border:1px solid var(--border-color);border-radius:6px;cursor:pointer;background:var(--surface-secondary);">' +
+                            '<input type="radio" name="q-' + q.id + '" value="' + 'ABCD'[i] + '" onchange="onChoiceSelect(' + q.id + ",'" + 'ABCD'[i] + "')" + '"> ' + o +
+                            '</label>').join('') + '</div>';
+                    } else {
+                        qHtml += (hideInp ? '' : '<input class="answer-input" id="a-' + q.id + '" placeholder="输入你的答案">');
+                    }
+                    // 统一按钮组
+                    qHtml += '<div class="btn-group">' +
+                        (isChoice
+                            ? '<button class="btn btn-primary" id="sb-' + q.id + '" onclick="submitChoice(' + q.id + ')" disabled>提交答案</button>'
+                            : (hideInp ? '' : '<button class="btn btn-primary" onclick="submitAns(' + q.id + ')">提交答案</button>' +
+                              '<button class="btn btn-ai" onclick="aiScore(' + q.id + ')" style="margin-left:4px;">🤖 AI评分</button>')) +
+                        '<button class="btn btn-ai" onclick="askAI(' + q.id + ",'" + q.question.replace(/'/g,"\\'") + "')" + '">🤖 AI</button>' +
                         '<button class="btn btn-fav" id="fb-' + q.id + '" onclick="toggleFav(' + q.id + ',this)">♡ 收藏</button></div>' +
                         '<div class="result" id="r-' + q.id + '"></div>';
+                    div.innerHTML = qHtml;
                     c.appendChild(div); checkFav(q.id, document.getElementById('fb-' + q.id));
                 }
                 if (!qs || qs.length === 0) {
@@ -1148,6 +1162,7 @@
             } catch(e) { c.innerHTML = '<div class="loading">加载失败：' + e.message + '</div>'; }
         }
         async function refreshPractice() {
+            if (!currentDomain) { document.getElementById('content').innerHTML = '<div class="empty-state"><div class="icon">📚</div><h3>请先选择一个领域</h3></div>'; return; }
             // 在销毁DOM之前记住选中的分类
             const savedCat = document.getElementById('pracCat')?.value || 'all';
             window._prac = null; document.getElementById('content').innerHTML = '<div class="loading">加载中...</div>';
@@ -1176,28 +1191,67 @@
             for (const q of qs) {
                 const div = document.createElement('div'); div.className = 'question-card';
                 div.id = 'qc-' + q.id;
-                div.innerHTML = '<div><span class="question-category">' + q.category + (q.subcategory?' - '+q.subcategory:'') + (_interleaveMode && q.tech_domain ? ' [' + q.tech_domain + ']' : '') + '</span><span class="question-title">' + q.question + '</span></div>' +
-                    (_recallMode
-                        ? '<div class="btn-group" style="margin-top:8px;"><button class="btn btn-primary" onclick="showAnswer(' + q.id + ')">👁️ 显示答案</button></div>' +
-                          '<div class="result" id="r-' + q.id + '" style="display:none;"></div>' +
-                          '<div class="btn-group recall-btns" id="rb-' + q.id + '" style="display:none;margin-top:8px;gap:6px;">' +
-                          '<button class="btn" style="background:#48bb78;color:#fff;" onclick="submitRecall(' + q.id + ",'remembered'" + ')">🟢 记得</button>' +
-                          '<button class="btn" style="background:#ecc94b;color:#1a202c;" onclick="submitRecall(' + q.id + ",'hazy'" + ')">🟡 模糊</button>' +
-                          '<button class="btn" style="background:#e53e3e;color:#fff;" onclick="submitRecall(' + q.id + ",'forgot'" + ')">🔴 忘了</button></div>'
-                        : (hideInp ? '' : '<input class="answer-input" id="a-' + q.id + '" placeholder="输入你的答案">' +
-                          '<div class="btn-group" style="margin-top:6px;">' +
-                          '<button class="btn btn-primary" onclick="submitAns(' + q.id + ')">提交答案</button>') +
-                          (hideInp ? '<div class="btn-group" style="margin-top:6px;">' : '')
-                    ) +
-                    '<div class="btn-group" style="margin-top:6px;">' +
-                    '<button class="btn btn-ai" onclick="askAI(' + q.id + ",'" + q.question.replace(/'/g,"\'") + "'" + ')">🤖 AI</button>' +
-                    '<button class="btn btn-fav" id="fb-' + q.id + '" onclick="toggleFav(' + q.id + ',this)">♡ 收藏</button></div>';
+                const isChoice = q.question_type === 'choice';
+                let qHtml2 = '<div><span class="question-category">' + q.category + (q.subcategory?' - '+q.subcategory:'') + (_interleaveMode && q.tech_domain ? ' [' + q.tech_domain + ']' : '') + '</span><span class="question-title">' + q.question + '</span></div>';
+                if (_recallMode) {
+                    qHtml2 += '<div class="btn-group" style="margin-top:8px;"><button class="btn btn-primary" onclick="showAnswer(' + q.id + ')">👁️ 显示答案</button></div>' +
+                        '<div class="result" id="r-' + q.id + '" style="display:none;"></div>' +
+                        '<div class="btn-group recall-btns" id="rb-' + q.id + '" style="display:none;margin-top:8px;gap:6px;">' +
+                        '<button class="btn" style="background:#48bb78;color:#fff;" onclick="submitRecall(' + q.id + ",'remembered'" + ')">🟢 记得</button>' +
+                        '<button class="btn" style="background:#ecc94b;color:#1a202c;" onclick="submitRecall(' + q.id + ",'hazy'" + ')">🟡 模糊</button>' +
+                        '<button class="btn" style="background:#e53e3e;color:#fff;" onclick="submitRecall(' + q.id + ",'forgot'" + ')">🔴 忘了</button></div>';
+                } else if (isChoice) {
+                    let opts2 = [];
+                    if (q.options) { try { opts2 = JSON.parse(q.options); } catch(e) {} }
+                    qHtml2 += '<div class="choice-group" id="cg-' + q.id + '">' + opts2.map((o,i) =>
+                        '<label class="choice-item" style="display:block;padding:6px 10px;margin:4px 0;border:1px solid var(--border-color);border-radius:6px;cursor:pointer;background:var(--surface-secondary);">' +
+                        '<input type="radio" name="rq-' + q.id + '" value="' + 'ABCD'[i] + '" onchange="onChoiceSelect(' + q.id + ",'" + 'ABCD'[i] + "')" + '"> ' + o +
+                        '</label>').join('') + '</div>';
+                } else {
+                    qHtml2 += (hideInp ? '' : '<input class="answer-input" id="a-' + q.id + '" placeholder="输入你的答案">');
+                }
+                // 统一按钮组：所有题型公用
+                qHtml2 += '<div class="btn-group" style="margin-top:6px;">' +
+                    (isChoice
+                        ? '<button class="btn btn-primary" id="sb-' + q.id + '" onclick="submitChoice(' + q.id + ')" disabled>提交答案</button>'
+                        : (hideInp ? '' : '<button class="btn btn-primary" onclick="submitAns(' + q.id + ')">提交答案</button>')) +
+                    '<button class="btn btn-ai" onclick="askAI(' + q.id + ",'" + q.question.replace(/'/g,"\\'") + "')" + '">🤖 AI</button>' +
+                    '<button class="btn btn-fav" id="fb-' + q.id + '" onclick="toggleFav(' + q.id + ',this)">♡ 收藏</button></div>' +
+                    '<div class="result" id="r-' + q.id + '"></div>';
+                div.innerHTML = qHtml2;
                 c.appendChild(div); checkFav(q.id, document.getElementById('fb-' + q.id));
             }
             if (!qs || qs.length === 0) {
                 c.innerHTML = (c.innerHTML || '') + '<div class="empty-state" style="margin-top:20px;"><div class="icon">📭</div><h3>该分类下暂无题目</h3><p>请切换分类或前往「管理题目」添加题目</p></div>';
             }window._prac = c.innerHTML;
         }
+        // ---- 选择题支持 ----
+        let _selectedChoice = {};
+        function onChoiceSelect(qid, val) {
+            _selectedChoice[qid] = val;
+            document.getElementById('sb-' + qid).disabled = false;
+        }
+        async function submitChoice(qid) {
+            const val = _selectedChoice[qid];
+            if (!val) { toast('请选择一个选项', '⚠️'); return; }
+            if (!currentDomain) { toast('请先选择一个领域', '⚠️'); return; }
+            try {
+                const d = await api('POST', '/api/questions/' + qid + '/answer', { userAnswer: val, tech_domain: currentDomain.code });
+                const r = document.getElementById('r-' + qid);
+                r.className = 'result ' + (d.isCorrect ? 'correct' : 'incorrect');
+                r.innerHTML = d.isCorrect ? '✓ 正确！' : '✗ 错误。正确答案：' + d.correctAnswer;
+                const labels = document.querySelectorAll('#cg-' + qid + ' .choice-item');
+                const correctIdx = 'ABCD'.indexOf(d.correctAnswer?.charAt(0) || '');
+                labels.forEach((l, i) => {
+                    l.style.borderColor = i === correctIdx ? '#48bb78' : (l.querySelector('input').checked && !d.isCorrect ? '#e53e3e' : 'var(--border-color)');
+                    l.style.background = i === correctIdx ? '#f0fff4' : (l.querySelector('input').checked && !d.isCorrect ? '#fff5f5' : 'var(--surface-secondary)');
+                });
+                document.getElementById('sb-' + qid).disabled = true;
+                if (d.isCorrect) toast('✅ 正确！', '🎉');
+                else toast('❌ 错误，正确答案：' + d.correctAnswer, '💡');
+            } catch(e) { toast('提交失败：' + e.message, '❌'); }
+        }
+
         async function submitAns(qid) {
             const a = document.getElementById('a-' + qid).value;
             if (!a) { toast('请先输入答案', '✏️'); return; }
@@ -1557,7 +1611,9 @@
                 '<select id="genCat" onchange="onGenCatChange()" style="flex:1;padding:8px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;background:var(--input-bg);color:var(--text-primary);"><option value="">加载中...</option></select>' +
                 '<button class="btn btn-ai" id="btnAiCategory" onclick="aiSuggestCategories()" style="white-space:nowrap;flex-shrink:0;">🤖 AI建议</button></div></div>' +
                 '<div class="form-group" id="genCustomGroup" style="display:none;"><label>自定义主题</label><input id="genTopic" placeholder="例如：JVM垃圾回收" style="width:100%;"></div>' +
-                '<div class="form-group"><label>数量（1-20）</label><input id="genCount" value="5" style="width:100px;"></div>' +
+                '<div style="display:flex;gap:12px;">' +
+                '<div class="form-group" style="flex:1;"><label>选择题数量</label><input id="genChoiceCount" type="number" value="5" min="1" max="50" style="width:100%;"></div>' +
+                '<div class="form-group" style="flex:1;"><label>填空题数量</label><input id="genFillCount" type="number" value="5" min="1" max="50" style="width:100%;"></div></div>' +
                 '<div class="btn-group">' +
                 '<button class="btn btn-ai" id="btnGenerate" onclick="doAIGenerate()" style="display:none;">✨ 生成</button>' +
                 '<button class="btn btn-success" id="btnAutoExpand" onclick="doAIAutoExpand()">📈 自动扩充</button>' +
@@ -1641,7 +1697,8 @@
             const custom = document.getElementById('genTopic')?.value || '';
             const topic = cat === '__custom__' ? custom : (cat || custom);
             if (!topic) { toast('请选择分类或输入自定义主题', '⚠️'); return; }
-            const count = parseInt(document.getElementById('genCount').value) || 5;
+            const choiceCount = parseInt(document.getElementById('genChoiceCount')?.value) || 20;
+            const fillCount = parseInt(document.getElementById('genFillCount')?.value) || 20;
             _generating = true;
             const genBtn = document.querySelector('#aiGenForm .btn-ai');
             if (genBtn) genBtn.disabled = true;
@@ -1657,21 +1714,22 @@
                         'Content-Type': 'application/json',
                         'Authorization': 'Bearer ' + token
                     },
-                    body: JSON.stringify({ topic, count, saveToCustom: true, tech_domain: currentDomain.code })
+                    body: JSON.stringify({ topic, choiceCount, fillCount, saveToCustom: true, tech_domain: currentDomain.code })
                 });
                 
                 if (!response.ok) throw new Error('请求失败');
                 
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
+                let sseBuf = '';
                 
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
                     
-                    const chunk = decoder.decode(value, { stream: true });
-                    const lines = chunk.split('\n');
-                    
+                    sseBuf += decoder.decode(value, { stream: true });
+                    const lines = sseBuf.split('\n');
+                    sseBuf = lines.pop() || '';
                     for (const line of lines) {
                         if (!line.startsWith('data: ')) continue;
                         const dataStr = line.slice(6).trim();
@@ -1680,18 +1738,20 @@
                         try {
                             const data = JSON.parse(dataStr);
                             
-                            if (data.type === 'content') {
-                                fullContent += data.content;
-                                streamContent.textContent = fullContent;
-                                streamContent.scrollTop = streamContent.scrollHeight;
+                            if (data.type === 'step') {
+                                streamContent.innerHTML = '<span style="color:#94a3b8;">' + data.content + '</span>';
+                            } else if (data.type === 'content') {
+                                fullContent += (data.content || '');
+                                streamContent.textContent = fullContent.slice(-1000);
                             } else if (data.type === 'done') {
                                 if (data.parsed) {
-                                    res.innerHTML = '<div style="color:#48bb78;">✅ 成功生成 ' + data.count + ' 题，已保存到自定义题库</div><pre style="font-size:12px;background:var(--surface-secondary);padding:10px;margin-top:5px;overflow:auto;white-space:pre-wrap;">' + JSON.stringify(data.questions, null, 2) + '</pre>';
-                                    toast('AI生成了 ' + data.count + ' 题', '✅');
+                                    const total = data.saved || 0;
+                                    res.innerHTML = '<div style="color:#48bb78;">✅ 成功生成 ' + total + ' 题' + (data.skipped ? '（跳过 ' + data.skipped + ' 题重复）' : '') + '，已保存到自定义题库</div>';
+                                    toast('AI生成了 ' + total + ' 题', '✅');
                                     setTimeout(() => { document.getElementById('aiGenForm')?.remove(); loadManage(); }, 1500);
                                 } else {
-                                    res.innerHTML = '<div style="color:#ed8936;">⚠️ AI返回格式异常，请重试</div><pre style="font-size:12px;background:var(--surface-secondary);padding:10px;margin-top:5px;overflow:auto;">' + (data.raw || '') + '</pre>';
-                                    toast('AI返回格式异常，已自动刷新', '⚠️');
+                                    res.innerHTML = '<div style="color:#ed8936;">⚠️ AI返回格式异常，请重试</div>';
+                                    toast('AI返回格式异常', '⚠️');
                                     setTimeout(() => { document.getElementById('aiGenForm')?.remove(); loadManage(); }, 1500);
                                 }
                             } else if (data.type === 'error') {
@@ -1785,44 +1845,50 @@
 
                 for (let i = 0; i < targets.length; i++) {
                     const cat = targets[i];
-                    let streamHtml = '';
                     res.innerHTML = '<div><span class="loading">📈 正在扩充 <strong>' + cat + '</strong> (' + (i + 1) + '/' + targets.length + ')</span></div>' +
                         '<div id="genExpandStream" style="margin-top:8px;padding:8px;background:var(--surface-secondary);border-radius:6px;font-size:12px;max-height:200px;overflow-y:auto;white-space:pre-wrap;"></div>';
 
                     const r = await fetch(API_BASE + '/api/ai/generate', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                        body: JSON.stringify({ topic: cat, count: 3, saveToCustom: true, tech_domain: currentDomain.code })
+                        body: JSON.stringify({ topic: cat, choiceCount: 3, fillCount: 3, saveToCustom: true, tech_domain: currentDomain.code })
                     });
                     if (!r.ok) continue;
 
                     const reader = r.body.getReader();
                     const dec = new TextDecoder();
-                    let buf = '';
+                    let sseBuf = '';
+                    let displayContent = '';
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done) break;
-                        buf += dec.decode(value, { stream: true });
-                        for (const ln of buf.split('\n')) {
+                        sseBuf += dec.decode(value, { stream: true });
+                        const lines = sseBuf.split('\n');
+                        sseBuf = lines.pop() || '';
+                        for (const ln of lines) {
                             const s = ln.trim();
                             if (!s.startsWith('data: ')) continue;
                             const d = s.slice(6).trim();
                             if (d === '[DONE]') continue;
                             try {
                                 const p = JSON.parse(d);
-                                if (p.type === 'content') {
-                                    streamHtml += p.content;
-                                    const el = document.getElementById('genExpandStream');
-                                    if (el) el.textContent = streamHtml.slice(-500);
-                                }
-                                if (p.type === 'done' && p.parsed) {
+                                const el = document.getElementById('genExpandStream');
+                                if (p.type === 'step') {
+                                    if (el) el.innerHTML = '<span style="color:#94a3b8;">' + p.content + '</span>';
+                                } else if (p.type === 'content') {
+                                    displayContent += (p.content || '');
+                                    if (el) el.textContent = displayContent.slice(-1000);
+                                } else if (p.type === 'done' && p.parsed) {
                                     totalSaved += p.saved || 0;
                                     totalSkipped += p.skipped || 0;
+                                    if (el) el.innerHTML = '<div style="color:#48bb78;">✅ 完成，本分类保存 ' + (p.saved || 0) + ' 题</div>';
+                                } else if (p.type === 'error') {
+                                    if (el) el.innerHTML = '<div style="color:#e53e3e;">❌ ' + p.content + '</div>';
                                 }
                             } catch(e) {}
                         }
-                        buf = '';
                     }
+
                 }
 
                 res.innerHTML = '<div style="color:#48bb78;">✅ 扩充完成！保存 ' + totalSaved + ' 题' +
@@ -2183,7 +2249,9 @@
                 '<div class="form-group"><label>领域名称（可选，自动生成）</label><input id="domainName" placeholder="例如：React"></div>' +
                 '<div class="form-group"><label>领域代码（可选，自动生成）</label><input id="domainCode" placeholder="例如：react"></div>' +
                 '<div class="form-group"><label>图标（可选，自动推荐）</label><input id="domainIcon" placeholder="例如：⚛️"></div>' +
-                '<div class="form-group"><label>题目数量</label><input id="domainQuestions" type="number" value="50" min="5" max="100"></div>' +
+                '<div style="display:flex;gap:12px;">' +
+                '<div class="form-group" style="flex:1;"><label>选择题数量</label><input id="domainChoiceCount" type="number" value="5" min="1" max="100" style="width:100%;"></div>' +
+                '<div class="form-group" style="flex:1;"><label>填空题数量</label><input id="domainFillCount" type="number" value="5" min="1" max="100" style="width:100%;"></div></div>' +
                 '<div id="generateProgress" style="display:none;margin-top:10px;padding:10px;background:var(--surface-secondary);border-radius:6px;font-size:14px;max-height:300px;overflow-y:auto;"><div id="progressText"></div></div>' +
                 '<div class="btn-group" style="margin-top:10px;">' +
                 '<button class="btn btn-primary" id="btnGenerateDomain" onclick="generateNewDomain()">✨ 开始生成</button></div>' +
@@ -2252,8 +2320,12 @@
                             <input id="domainIcon" placeholder="例如：⚛️">
                         </div>
                         <div class="form-group">
-                            <label>题目数量</label>
-                            <input id="domainQuestions" type="number" value="50" min="5" max="100">
+                            <label>选择题数量</label>
+                            <input id="domainChoiceCount" type="number" value="5" min="1" max="100" style="width:100%;">
+                        </div>
+                        <div class="form-group">
+                            <label>填空题数量</label>
+                            <input id="domainFillCount" type="number" value="5" min="1" max="100" style="width:100%;">
                         </div>
                         <div id="generateProgress" style="margin:10px 0;padding:10px;background:var(--surface-secondary);border-radius:5px;display:none;">
                             <div id="progressText">准备中...</div>
@@ -2366,7 +2438,8 @@
             const name = document.getElementById('domainName').value.trim();
             const code = document.getElementById('domainCode').value.trim();
             const icon = document.getElementById('domainIcon').value.trim();
-            const numQuestions = parseInt(document.getElementById('domainQuestions').value) || 50;
+            const domainChoiceCount = parseInt(document.getElementById('domainChoiceCount').value) || 20;
+            const domainFillCount = parseInt(document.getElementById('domainFillCount').value) || 20;
 
             if (!description) {
                 toast('请输入领域描述', '⚠️');
@@ -2386,7 +2459,7 @@
                 const r = await fetch(API_BASE + '/api/ai/generate-domain', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                    body: JSON.stringify({ description, language: name || undefined, code: code || undefined, icon: icon || undefined, numQuestions })
+                    body: JSON.stringify({ description, language: name || undefined, code: code || undefined, icon: icon || undefined, choiceCount: domainChoiceCount, fillCount: domainFillCount })
                 });
 
                 if (!r.ok) {

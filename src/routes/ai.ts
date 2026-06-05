@@ -413,23 +413,24 @@ router.delete('/chat/:id', async (req, res) => {
 // ============ AI生成题目（SSE流式） ============
 router.post('/generate', async (req, res) => {
   try {
-    const { topic, count = 5, saveToCustom = true, tech_domain } = req.body;
+    const { topic, choiceCount: rawChoice, fillCount: rawFill, saveToCustom = true, tech_domain } = req.body;
     if (!topic) return res.status(400).json({ error: '请指定主题' });
 
-    const finalCount = Math.min(Math.max(count, 1), 20);
-    // 从数据库中获取领域名称，避免硬编码
+    const choiceCount = parseInt(rawChoice) || 5;
+    const fillCount = parseInt(rawFill) || 5;
+
+    // 从数据库中获取领域名称
     const domainRow = tech_domain ? await db.get('SELECT name FROM tech_domains WHERE code = ? AND user_id = ?', [tech_domain, req.user.userId]) : null;
     const domainName = domainRow ? domainRow.name : '默认';
-    // 获取当前领域已有题目（不含答案），告知 AI 避免重复
+    // 已有题目去重提示
     const existingQuestions = await db.all(
       'SELECT question FROM questions WHERE tech_domain = ? UNION SELECT question FROM custom_questions WHERE tech_domain = ?',
       [tech_domain || '', tech_domain || '']
     );
     const existingList = existingQuestions.map((r: any) => r.question).filter(Boolean).join('\n');
     const excludeHint = existingList ? '\n\n当前领域已有以下题目，请避免生成重复或高度相似的题目：\n' + existingList : '';
-    const prompt = '你是一位' + domainName + '知识领域的老师。请生成' + finalCount + '道关于"' + topic + '"的' + domainName + '题目。\n\n要求：\n1. 以严格JSON数组格式返回，不要包含任何其他文字说明\n2. 格式：[{"question":"问题","answer":"答案"}]\n3. 题目要有实际价值\n4. 答案简洁精炼，点到即止，不要长篇大论\n5. 用大白话回答，像在给朋友讲解一样自然' + excludeHint;
 
-    // 设置SSE响应头
+    // 原始流式：单次 AI 调用，prompt 指定填空+选择数量
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -441,12 +442,14 @@ router.post('/generate', async (req, res) => {
       return res.end();
     }
 
+    const finalCount = choiceCount + fillCount;
+    const prompt = '你是一位' + domainName + '知识领域的老师。请生成' + finalCount + '道关于"' + topic + '"的' + domainName + '题目（其中选择题' + choiceCount + '道，填空题' + fillCount + '道）。\n\n要求：\n1. 选择题用 options 字段存4个选项，answer 存正确选项字母（A/B/C/D），question_type 设为 "choice"\n2. 填空题 question_type 设为 "fill"\n3. 以严格JSON数组格式返回，不要包含任何其他文字说明\n4. 格式：[{"question":"问题","answer":"答案","question_type":"choice|fill","options":["A) 选项1","B) 选项2","C) 选项3","D) 选项4"]}]\n5. 题目要有实际价值\n6. 答案简洁精炼，点到即止\n7. 用大白话回答' + excludeHint;
+
     let fullContent = '';
     let buffer = '';
-    let hasData = false;
 
     try {
-      // 调用AI流式接口
+      res.write('data: ' + JSON.stringify({ type: 'step', content: '🤖 AI正在生成' + finalCount + '道题目...' }) + '\n\n');
       const response = await axios.post(
         AI_BASE_URL + '/chat/completions',
         {
@@ -461,58 +464,57 @@ router.post('/generate', async (req, res) => {
         {
           headers: { 'Authorization': 'Bearer ' + AI_API_KEY, 'Content-Type': 'application/json' },
           responseType: 'stream',
-          timeout: 60000
+          timeout: 120000
         }
       );
 
       response.data.on('data', (chunk: Buffer) => {
-        hasData = true;
-        buffer += chunk.toString();
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith('data: ')) continue;
-          const dataStr = trimmed.slice(6).trim();
-          if (dataStr === '[DONE]') { continue; }
-          try {
-            const parsed = JSON.parse(dataStr);
-            const content = parsed.choices?.[0]?.delta?.content || parsed.choices?.[0]?.text || parsed.content || '';
-            if (content) {
-              fullContent += content;
-              // 流式输出内容到前端
-              res.write('data: ' + JSON.stringify({ type: 'content', content }) + '\n\n');
-            }
-          } catch (e) {}
-        }
+        try {
+          const text = chunk.toString();
+          buffer += text;
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('data: ')) continue;
+            const dataStr = trimmed.slice(6).trim();
+            if (dataStr === '[DONE]') continue;
+            try {
+              const parsed = JSON.parse(dataStr);
+              const content = parsed.choices?.[0]?.delta?.content || parsed.choices?.[0]?.text || '';
+              if (content) {
+                fullContent += content;
+                res.write('data: ' + JSON.stringify({ type: 'content', content }) + '\n\n');
+              }
+            } catch (e) {}
+          }
+        } catch (e) {}
       });
 
-      let _ended = false;
       response.data.on('end', async () => {
-        // 防止多次触发
-        if (_ended) return;
-        _ended = true;
-
-        // 解析并保存题目
-        let generatedQuestions;
+        // 解析并保存
         try {
           let cleaned = fullContent.trim()
-            .replace(/^```json\s*/i, '')
-            .replace(/^```\s*/i, '')
-            .replace(/\s*```$/i, '')
-            .replace(/[\u201c\u201d]/g, '"')
-            .replace(/[\u2018\u2019]/g, "'");
+            .replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '')
+            .replace(/[\u201c\u201d]/g, '"').replace(/[\u2018\u2019]/g, "'");
           const arrStart = cleaned.indexOf('[');
-          const arrEnd = cleaned.lastIndexOf(']');
-          if (arrStart !== -1 && arrEnd > arrStart) {
-            cleaned = cleaned.substring(arrStart, arrEnd + 1);
+          if (arrStart !== -1) {
+            let depth = 1, idx = arrStart + 1, inStr = false, esc = false;
+            while (idx < cleaned.length && depth > 0) {
+              const ch = cleaned[idx];
+              if (esc) { esc = false; idx++; continue; }
+              if (ch === '\\') { esc = true; idx++; continue; }
+              if (ch === '"') { inStr = !inStr; idx++; continue; }
+              if (!inStr) { if (ch === '[') depth++; else if (ch === ']') depth--; }
+              idx++;
+            }
+            if (depth === 0) cleaned = cleaned.substring(arrStart, idx);
           }
-          generatedQuestions = JSON.parse(cleaned);
-          if (!Array.isArray(generatedQuestions)) throw new Error('not array');
+          const questions = JSON.parse(cleaned);
+          if (!Array.isArray(questions)) throw new Error('not array');
 
-          // 对本次生成结果自身去重（AI 偶发性重复输出）
           const seen = new Set<string>();
-          const uniqueQuestions = generatedQuestions.filter((q: any) => {
+          const uniqueQuestions = questions.filter((q: any) => {
             if (!q.question) return false;
             const key = q.question.trim().toLowerCase().slice(0, 100);
             if (seen.has(key)) return false;
@@ -520,32 +522,26 @@ router.post('/generate', async (req, res) => {
             return true;
           });
 
-          let savedCount = 0;
-          let skippedCount = 0;
-          let dupInResponse = generatedQuestions.length - uniqueQuestions.length;
-          if (saveToCustom) {
-            for (const q of uniqueQuestions) {
-              if (!q.question || !q.answer) continue;
-              const dup = await isDuplicateQuestion(q.question, tech_domain || '', db);
-              if (dup.isDuplicate) {
-                skippedCount++;
-                continue;
-              }
-              await db.run('INSERT INTO custom_questions (user_id, category, subcategory, question, answer, tags, tech_domain) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                [req.user.userId, topic, 'AI生成', q.question, q.answer, 'ai-generated', tech_domain || '']);
-              savedCount++;
-            }
+          let savedCount = 0, skippedCount = 0;
+          for (const q of uniqueQuestions) {
+            if (!q.question || !q.answer) continue;
+            const dup = await isDuplicateQuestion(q.question, tech_domain || '', db);
+            if (dup.isDuplicate) { skippedCount++; continue; }
+            const qt = q.question_type === 'choice' ? 'choice' : 'fill';
+            const opts = qt === 'choice' && Array.isArray(q.options) ? JSON.stringify(q.options) : null;
+            await db.run('INSERT INTO custom_questions (user_id, category, subcategory, question, answer, tags, tech_domain, question_type, options) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              [req.user.userId, topic, 'AI生成', q.question, q.answer, 'ai-generated', tech_domain || '', qt, opts]);
+            savedCount++;
           }
-
-          res.write('data: ' + JSON.stringify({ type: 'done', parsed: true, count: uniqueQuestions.length, saved: savedCount, skipped: skippedCount + dupInResponse, questions: uniqueQuestions }) + '\n\n');
+          res.write('data: ' + JSON.stringify({ type: 'done', parsed: true, saved: savedCount, skipped: skippedCount }) + '\n\n');
         } catch (e) {
-          try { res.write('data: ' + JSON.stringify({ type: 'done', parsed: false, raw: fullContent, message: 'AI返回格式异常' }) + '\n\n'); } catch (w) {}
+          res.write('data: ' + JSON.stringify({ type: 'done', parsed: false, raw: fullContent }) + '\n\n');
         }
-        try { res.write('data: [DONE]\n\n'); res.end(); } catch (w) {}
+        res.write('data: [DONE]\n\n');
+        res.end();
       });
 
       response.data.on('error', (err: any) => {
-        console.error('Stream error:', err);
         res.write('data: ' + JSON.stringify({ type: 'error', content: '流式传输中断' }) + '\n\n');
         res.write('data: [DONE]\n\n');
         res.end();
@@ -557,15 +553,18 @@ router.post('/generate', async (req, res) => {
     }
   } catch (error: any) {
     console.error('Generate error:', error);
-    res.setHeader('Content-Type', 'application/json');
     res.status(500).json({ error: error.message || 'AI生成失败' });
   }
 });
 
 // ============ AI生成新领域（SSE流式） ============
+
+// ============ AI生成新领域（SSE流式） ============
 router.post('/generate-domain', async (req, res) => {
   try {
-    const { description, language, code, icon, numQuestions = 50 } = req.body;
+    const { description, language, code, icon, choiceCount: rawChoice, fillCount: rawFill } = req.body;
+    const choiceCount = parseInt(rawChoice) || 5;
+    const fillCount = parseInt(rawFill) || 5;
     if (!description) {
       res.setHeader('Content-Type', 'application/json');
       return res.status(400).json({ success: false, message: '请提供领域描述' });
@@ -628,7 +627,8 @@ router.post('/generate-domain', async (req, res) => {
     res.write('data: ' + JSON.stringify({ type: 'domain', domain: domainInfo }) + '\n\n');
 
     // 3. 流式生成题目
-    res.write('data: ' + JSON.stringify({ type: 'step', content: '🤖 AI正在生成' + numQuestions + '道' + domainInfo.name + '面试题...' }) + '\n\n');
+    const totalQuestions = choiceCount + fillCount;
+    res.write('data: ' + JSON.stringify({ type: 'step', content: '🤖 AI正在生成' + totalQuestions + '道' + domainInfo.name + '题目（选择' + choiceCount + '填空' + fillCount + '）...' }) + '\n\n');
 
     let savedCount = 0;
     let fullContent = '';
@@ -638,7 +638,7 @@ router.post('/generate-domain', async (req, res) => {
       const existingQ = await db.all('SELECT question FROM questions WHERE tech_domain = ? UNION SELECT question FROM custom_questions WHERE tech_domain = ?', [domainInfo.code, domainInfo.code]);
       const existingList = existingQ.map((r: any) => r.question).filter(Boolean).join('\n');
       const excludeHint = existingList ? `\n\n当前领域已有以下题目，请避免生成重复或高度相似的题目：\n${existingList}` : '';
-      const questionsPrompt = `你是一位${domainInfo.name}教育专家。请生成${numQuestions}道${domainInfo.name}题目。\n\n要求：\n1. 覆盖不同难度等级\n2. 根据${domainInfo.name}领域的特点设计分类\n3. 题目要有实际价值\n4. 答案简洁精炼，点到即止\n5. 用大白话回答\n\n返回JSON数组格式：\n[{"category":"分类名称","subcategory":"子分类（可选）","question":"问题","answer":"答案","difficulty":"easy|medium|hard","tags":"标签（多个用逗号分隔）"}]\n\n只返回JSON数组，不要包含任何其他说明。${excludeHint}`;
+      const questionsPrompt = `你是一位${domainInfo.name}教育专家。请生成${totalQuestions}道${domainInfo.name}题目（其中选择题${choiceCount}道，填空题${fillCount}道）。\n\n要求：\n1. 选择题用 options 字段存储4个选项，answer 存正确选项字母（A/B/C/D），question_type 设为 "choice"\n2. 填空题 question_type 设为 "fill"\n3. 覆盖不同难度等级\n4. 根据${domainInfo.name}领域的特点设计分类\n5. 题目要有实际价值\n6. 答案简洁精炼，点到即止\n7. 用大白话回答\n\n返回JSON数组格式：\n[{"category":"分类名称","subcategory":"子分类（可选）","question":"问题","answer":"答案","difficulty":"easy|medium|hard","tags":"标签","question_type":"choice|fill","options":["A) 选项1","B) 选项2","C) 选项3","D) 选项4"]}]\n\n只返回JSON数组，不要包含任何其他说明。${excludeHint}`;
 
       const response = await axios.post(
         AI_BASE_URL + '/chat/completions',
@@ -742,9 +742,11 @@ router.post('/generate-domain', async (req, res) => {
                 console.log('⏭️ 跳过重复题目:', q.question.substring(0, 60));
                 continue;
               }
+              const qt = q.question_type === 'choice' ? 'choice' : 'fill';
+              const opts = qt === 'choice' && Array.isArray(q.options) ? JSON.stringify(q.options) : null;
               await db.run(
-                'INSERT INTO questions (category, subcategory, question, answer, difficulty, tags, tech_domain) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                [q.category || '基础', q.subcategory || '', q.question, q.answer, difficulty, q.tags || '', domainInfo.code]
+                'INSERT INTO questions (category, subcategory, question, answer, difficulty, tags, tech_domain, question_type, options) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [q.category || '基础', q.subcategory || '', q.question, q.answer, difficulty, q.tags || '', domainInfo.code, qt, opts]
               );
               savedCount++;
             } catch (e) {
