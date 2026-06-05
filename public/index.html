@@ -6,8 +6,8 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Java八股文学习系统 - AI增强版</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☕</text></svg>">
+    <title>Studying-With-AI - AI 学习系统</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         :root {
@@ -148,8 +148,8 @@
         .ans-tab.active { background: #667eea; color: white; border-color: #667eea; }
             /* ===== 多领域侧边栏 ===== */
         .app-layout { display: flex; min-height: 100vh; }
-        .sidebar { width: 200px; min-width: 200px; background: #1a1a2e; color: #fff; display: flex; flex-direction: column; padding: 16px 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
-        .sidebar-header { padding: 0 16px 16px; font-size: 14px; font-weight: 600; color: #8892b0; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #2d2d4e; margin-bottom: 8px; }
+        .sidebar { width: 200px; min-width: 200px; background: #1a1a2e; color: #fff; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+        .sidebar-header { padding: 8px 16px 12px; font-size: 20px; font-weight: 600; color: #8892b0; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #2d2d4e; margin-bottom: 8px; }
         .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; cursor: pointer; color: #a0a0c0; border-left: 3px solid transparent; transition: all 0.2s; font-size: 14px; text-decoration: none; }
         .sidebar-item:hover { background: rgba(255,255,255,0.05); color: #fff; }
         .sidebar-item.active { background: rgba(100, 108, 255, 0.15); color: #646cff; border-left-color: #646cff; }
@@ -205,7 +205,7 @@
         <div class="main-content">
             <div class="container" style="max-width:100%;padding:0;">
                 <div class="header" style="display:flex;justify-content:space-between;align-items:center;gap:20px;">
-                    <h1 id="currentDomainTitle">☕ Java 学习</h1>
+                    <h1 id="currentDomainTitle">📚 Studying-With-AI</h1>
                     <!-- 学习统计区域 -->
                     <div id="statsBar" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);color:white;padding:8px 16px;border-radius:8px;display:flex;gap:16px;align-items:center;">
                         <div style="text-align:center;">
@@ -269,10 +269,11 @@
         let aiAnswers = [];      // 多答案缓存 [{text, ts}]
         let currentAbortController = null;
         // ---- 多领域支持 ----
-        let currentDomain = { code: 'java', name: 'Java', icon: '☕' };
+        let currentDomain = null;
         let domains = [];
 
         async function updateStats() {
+            if (!currentDomain) return;
             try {
                 const s = await api('GET', '/api/questions/progress/stats?domain=' + encodeURIComponent(currentDomain.code));
                 document.getElementById('statAttempted').textContent = s.total_attempted || 0;
@@ -305,10 +306,17 @@
                     } catch(e) {}
                 }
                 renderSidebar();
-                const d = domains.find(d => d.code === currentDomain.code);
-                if (d) currentDomain = d;
-                document.getElementById('currentDomainTitle').textContent = (currentDomain.icon || '📚') + ' ' + currentDomain.name + ' 学习';
-                await updateStats();
+                if (domains.length > 0) {
+                    const d = domains.find(d => d.code === currentDomain?.code);
+                    currentDomain = d || domains[0];
+                    setDomainUI(true);
+                    document.getElementById('currentDomainTitle').textContent = (currentDomain.icon || '📚') + ' ' + currentDomain.name + ' 学习';
+                    await updateStats();
+                } else {
+                    currentDomain = null;
+                    setDomainUI(false);
+                    document.getElementById('currentDomainTitle').textContent = '📚 无可用领域，请先创建或生成一个领域';
+                }
             } catch(e) {
                 console.error('加载领域列表失败', e);
             }
@@ -346,12 +354,16 @@
 
         function renderSidebar() {
             const sidebar = document.getElementById('sidebar');
-            let html = '<div class="sidebar-header">技术领域</div>';
-            for (const d of domains) {
-                const active = d.code === currentDomain.code ? 'active' : '';
-                html += '<div class="sidebar-item ' + active + '" draggable="true" data-code="' + d.code + '" onclick="switchDomain(\'' + d.code + '\')">' +
-                    '<span class="icon">' + (d.icon || '📚') + '</span>' +
-                    '<span>' + d.name + '</span></div>';
+            let html = '<div class="sidebar-header">知识领域</div>';
+            if (domains.length === 0) {
+                html += '<div style="padding:16px;text-align:center;color:var(--text-secondary);font-size:13px;">暂无领域<br>请先在「领域管理」中生成</div>';
+            } else {
+                for (const d of domains) {
+                    const active = currentDomain && d.code === currentDomain.code ? 'active' : '';
+                    html += '<div class="sidebar-item ' + active + '" draggable="true" data-code="' + d.code + '" onclick="switchDomain(\'' + d.code + '\')">' +
+                        '<span class="icon">' + (d.icon || '📚') + '</span>' +
+                        '<span>' + d.name + '</span></div>';
+                }
             }
             
             // 把AI咨询和设置也放到底部
@@ -1975,7 +1987,7 @@
                 if (msgsDiv) {
                     msgsDiv.innerHTML = msgs.length
                         ? msgs.map(m => '<div class="ai-msg ' + m.role + '"><div class="role">' + (m.role === 'user' ? '你' : 'AI') + '</div>' + renderMd(m.content) + '</div>').join('')
-                        : '<div class="empty-state" style="padding:40px 20px;color:var(--text-secondary);"><div class="icon">💬</div><p>输入Java问题，AI为你解答</p></div>';
+                        : '<div class="empty-state" style="padding:40px 20px;color:var(--text-secondary);"><div class="icon">💬</div><p>输入问题，AI为你解答</p></div>';
                     msgsDiv.scrollTop = msgsDiv.scrollHeight;
                 }
                 // 更新侧边栏高亮
@@ -2059,7 +2071,7 @@
                 '<div class="form-group"><label>领域名称（可选，自动生成）</label><input id="domainName" placeholder="例如：React"></div>' +
                 '<div class="form-group"><label>领域代码（可选，自动生成）</label><input id="domainCode" placeholder="例如：react"></div>' +
                 '<div class="form-group"><label>图标（可选，自动推荐）</label><input id="domainIcon" placeholder="例如：⚛️"></div>' +
-                '<div class="form-group"><label>题目数量</label><input id="domainQuestions" type="number" value="5" min="5" max="100"></div>' +
+                '<div class="form-group"><label>题目数量</label><input id="domainQuestions" type="number" value="50" min="5" max="100"></div>' +
                 '<div id="generateProgress" style="display:none;margin-top:10px;padding:10px;background:var(--surface-secondary);border-radius:6px;font-size:14px;max-height:300px;overflow-y:auto;"><div id="progressText"></div></div>' +
                 '<div class="btn-group" style="margin-top:10px;">' +
                 '<button class="btn btn-primary" id="btnGenerateDomain" onclick="generateNewDomain()">✨ 开始生成</button></div>' +
@@ -2076,14 +2088,11 @@
             const listEl = document.getElementById('domainsList');
             try {
                 const domainsData = await api('GET', '/api/domains');
-                const presetDomains = ['java', 'go', 'python', 'frontend', 'database', 'devops'];
                 listEl.innerHTML = domainsData.map(d => {
-                    const isPreset = presetDomains.includes(d.code.toLowerCase());
                     return `<div class="stat-card" style="padding:10px;text-align:left;position:relative;">
                         <div style="font-size:24px;margin-bottom:5px;cursor:pointer;" onclick="switchDomain('${d.code}')">${d.icon} ${d.name}</div>
                         <div style="font-size:12px;color:var(--text-secondary);cursor:pointer;" onclick="switchDomain('${d.code}')">${d.code} - ${d.description}</div>
-                        ${isPreset ? '<span style="position:absolute;top:5px;right:5px;font-size:10px;background:var(--surface-secondary);padding:2px 6px;border-radius:4px;color:var(--text-secondary);">预设</span>'
-                        : '<button class="btn btn-danger" style="position:absolute;top:5px;right:5px;padding:3px 8px;font-size:11px;" onclick="event.stopPropagation();deleteDomain(\'' + d.code + '\',\'' + d.name + '\')">🗑️ 删除</button>'}
+                        <button class="btn btn-danger" style="position:absolute;top:5px;right:5px;padding:3px 8px;font-size:11px;" onclick="event.stopPropagation();deleteDomain('${d.code}','${d.name}')">🗑️ 删除</button>
                     </div>`;
                 }).join('');
             } catch(e) {
@@ -2092,7 +2101,7 @@
         }
 
         async function deleteDomain(code, name) {
-            if (!confirm('确定要删除领域「' + name + '」吗？\n该领域下的所有题目和学习记录也将被删除！')) return;
+            if (!confirm('确定要删除领域「' + name + '」吗？\n该领域下的学习记录将被删除，但题目保留不影响其他用户。')) return;
             try {
                 await api('DELETE', '/api/domains/' + code);
                 toast('已删除领域：' + name, '🗑️');
@@ -2132,7 +2141,7 @@
                         </div>
                         <div class="form-group">
                             <label>题目数量</label>
-                            <input id="domainQuestions" type="number" value="5" min="5" max="100">
+                            <input id="domainQuestions" type="number" value="50" min="5" max="100">
                         </div>
                         <div id="generateProgress" style="margin:10px 0;padding:10px;background:var(--surface-secondary);border-radius:5px;display:none;">
                             <div id="progressText">准备中...</div>
@@ -2245,7 +2254,7 @@
             const name = document.getElementById('domainName').value.trim();
             const code = document.getElementById('domainCode').value.trim();
             const icon = document.getElementById('domainIcon').value.trim();
-            const numQuestions = parseInt(document.getElementById('domainQuestions').value) || 5;
+            const numQuestions = parseInt(document.getElementById('domainQuestions').value) || 50;
 
             if (!description) {
                 toast('请输入领域描述', '⚠️');

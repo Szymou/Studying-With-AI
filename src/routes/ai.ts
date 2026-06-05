@@ -418,12 +418,12 @@ router.post('/generate', async (req, res) => {
 
     const finalCount = Math.min(Math.max(count, 1), 20);
     // 从数据库中获取领域名称，避免硬编码
-    const domainRow = tech_domain ? await db.get('SELECT name FROM tech_domains WHERE code = ?', [tech_domain]) : null;
-    const domainName = domainRow ? domainRow.name : 'Java';
+    const domainRow = tech_domain ? await db.get('SELECT name FROM tech_domains WHERE code = ? AND user_id = ?', [tech_domain, req.user.userId]) : null;
+    const domainName = domainRow ? domainRow.name : '默认';
     // 获取当前领域已有题目（不含答案），告知 AI 避免重复
     const existingQuestions = await db.all(
       'SELECT question FROM questions WHERE tech_domain = ? UNION SELECT question FROM custom_questions WHERE tech_domain = ?',
-      [tech_domain || 'java', tech_domain || 'java']
+      [tech_domain || '', tech_domain || '']
     );
     const existingList = existingQuestions.map((r: any) => r.question).filter(Boolean).join('\n');
     const excludeHint = existingList ? '\n\n当前领域已有以下题目，请避免生成重复或高度相似的题目：\n' + existingList : '';
@@ -526,13 +526,13 @@ router.post('/generate', async (req, res) => {
           if (saveToCustom) {
             for (const q of uniqueQuestions) {
               if (!q.question || !q.answer) continue;
-              const dup = await isDuplicateQuestion(q.question, tech_domain || 'java', db);
+              const dup = await isDuplicateQuestion(q.question, tech_domain || '', db);
               if (dup.isDuplicate) {
                 skippedCount++;
                 continue;
               }
               await db.run('INSERT INTO custom_questions (user_id, category, subcategory, question, answer, tags, tech_domain) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                [req.user.userId, topic, 'AI生成', q.question, q.answer, 'ai-generated', tech_domain || 'java']);
+                [req.user.userId, topic, 'AI生成', q.question, q.answer, 'ai-generated', tech_domain || '']);
               savedCount++;
             }
           }
@@ -609,8 +609,8 @@ router.post('/generate-domain', async (req, res) => {
     if (code) domainInfo.code = code;
     if (icon) domainInfo.icon = icon;
 
-    // 检查领域是否已存在
-    const existingDomain = await db.get('SELECT * FROM tech_domains WHERE code = ?', [domainInfo.code]);
+    // 检查当前用户的该领域是否已存在
+    const existingDomain = await db.get('SELECT * FROM tech_domains WHERE code = ? AND user_id = ?', [domainInfo.code, req.user.userId]);
     if (existingDomain) {
       res.write('data: ' + JSON.stringify({ type: 'error', content: '该领域已存在: ' + domainInfo.name }) + '\n\n');
       res.write('data: [DONE]\n\n');
@@ -621,8 +621,8 @@ router.post('/generate-domain', async (req, res) => {
     res.write('data: ' + JSON.stringify({ type: 'step', content: '💾 正在保存领域信息...' }) + '\n\n');
 
     await db.run(
-      'INSERT INTO tech_domains (code, name, icon, description) VALUES (?, ?, ?, ?)',
-      [domainInfo.code, domainInfo.name, domainInfo.icon, domainInfo.description]
+      'INSERT INTO tech_domains (code, name, icon, description, user_id) VALUES (?, ?, ?, ?, ?)',
+      [domainInfo.code, domainInfo.name, domainInfo.icon, domainInfo.description, req.user.userId]
     );
 
     res.write('data: ' + JSON.stringify({ type: 'domain', domain: domainInfo }) + '\n\n');
@@ -693,10 +693,28 @@ router.post('/generate-domain', async (req, res) => {
             .replace(/\s*```$/i, '')
             .replace(/[\u201c\u201d]/g, '"')
             .replace(/[\u2018\u2019]/g, "'");
+
+          // 通过括号深度匹配精确提取最外层 JSON 数组
           const arrStart = cleaned.indexOf('[');
-          const arrEnd = cleaned.lastIndexOf(']');
-          if (arrStart !== -1 && arrEnd > arrStart) {
-            cleaned = cleaned.substring(arrStart, arrEnd + 1);
+          if (arrStart !== -1) {
+            let depth = 1;
+            let idx = arrStart + 1;
+            let inString = false;
+            let escape = false;
+            while (idx < cleaned.length && depth > 0) {
+              const ch = cleaned[idx];
+              if (escape) { escape = false; idx++; continue; }
+              if (ch === '\\') { escape = true; idx++; continue; }
+              if (ch === '"') { inString = !inString; idx++; continue; }
+              if (!inString) {
+                if (ch === '[') depth++;
+                else if (ch === ']') depth--;
+              }
+              idx++;
+            }
+            if (depth === 0) {
+              cleaned = cleaned.substring(arrStart, idx);
+            }
           }
           const questions = JSON.parse(cleaned);
           if (!Array.isArray(questions)) throw new Error('not array');

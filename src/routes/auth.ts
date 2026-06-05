@@ -1,6 +1,7 @@
 import express from 'express';
 import db from '../db';
 import { hashPassword, comparePassword, generateToken } from '../auth';
+import { PRESET_DOMAINS } from '../config';
 
 const router = express.Router();
 
@@ -17,7 +18,18 @@ router.post('/register', async (req, res) => {
     }
 
     const passwordHash = await hashPassword(password);
-    await db.run('INSERT INTO users (username, password_hash) VALUES (?, ?)', [username, passwordHash]);
+    const result = await db.run('INSERT INTO users (username, password_hash) VALUES (?, ?)', [username, passwordHash]);
+    const userId = result.lastID;
+
+    // 为新用户创建默认领域
+    for (const d of PRESET_DOMAINS) {
+      await db.run(
+        'INSERT INTO tech_domains (code, name, icon, description, sort_order, user_id) VALUES (?, ?, ?, ?, ?, ?)',
+        [d.code, d.name, d.icon, d.description, d.sortOrder, userId]
+      );
+    }
+    console.log(`✅ 为用户 ${username}(id=${userId}) 初始化 ${PRESET_DOMAINS.length} 个默认领域`);
+
     res.json({ message: '注册成功，请登录' });
   } catch (error) {
     console.error(error);

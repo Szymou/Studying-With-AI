@@ -59,7 +59,7 @@ router.post('/', async (req, res) => {
     const result = await db.run(`
       INSERT INTO custom_questions (user_id, category, subcategory, question, answer, tags, tech_domain)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, [userId, category || '自定义', subcategory || null, question, answer, tags || null, tech_domain || 'java']);
+    `, [userId, category || '自定义', subcategory || null, question, answer, tags || null, tech_domain || '']);
 
     res.json({ id: result.lastID, message: '创建成功' });
   } catch (error) {
@@ -84,7 +84,7 @@ router.post('/batch', async (req, res) => {
       await db.run(`
         INSERT INTO custom_questions (user_id, category, subcategory, question, answer, tags, tech_domain)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-      `, [userId, q.category || '自定义', q.subcategory || null, q.question, q.answer, q.tags || null, q.tech_domain || 'java']);
+      `, [userId, q.category || '自定义', q.subcategory || null, q.question, q.answer, q.tags || null, q.tech_domain || '']);
       inserted++;
     }
 

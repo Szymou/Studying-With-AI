@@ -5,12 +5,10 @@
 
 // 预设领域
 export const PRESET_DOMAINS = [
-  { code: 'java', name: 'Java', icon: '☕', description: 'Java 企业级开发', sortOrder: 1 },
-  { code: 'go', name: 'Go', icon: '🐹', description: 'Go 语言开发', sortOrder: 2 },
-  { code: 'python', name: 'Python', icon: '🐍', description: 'Python 开发', sortOrder: 3 },
-  { code: 'frontend', name: '前端', icon: '⚛️', description: '前端开发', sortOrder: 4 },
-  { code: 'database', name: '数据库', icon: '🗄️', description: '数据库技术', sortOrder: 5 },
-  { code: 'devops', name: '运维 & DevOps', icon: '🐳', description: '运维与 DevOps', sortOrder: 6 },
+  { code: 'it-tech', name: 'IT技术', icon: '💻', description: '信息技术与编程', sortOrder: 1 },
+  { code: 'general', name: '通用知识', icon: '📚', description: '人文地理与生活常识', sortOrder: 2 },
+  { code: 'car', name: '汽车', icon: '🚗', description: '汽车构造与驾驶知识', sortOrder: 3 },
+  { code: 'gaokao', name: '高考复习', icon: '🎓', description: '高考各科复习资料', sortOrder: 4 },
 ];
 
 export const PRESET_DOMAIN_CODES = PRESET_DOMAINS.map(d => d.code);

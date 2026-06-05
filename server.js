@@ -22,11 +22,11 @@ app.use((req, res, next) => {
 // 解析 JSON 请求体（必须在所有需要 body 的路由之前）
 app.use(express.json());
 
-// AI 配置
+// AI 配置（从环境变量读取）
 const AI_CONFIG = {
-  url: 'http://127.0.0.1:22217/v1/chat/completions',
-  model: 'deepseek-default',
-  apiKey: 'sk-79df8f193b87453c7ea88bcc2132f0a7444d2ac722037ab8'
+  url: process.env.AI_API_BASE_URL ? (process.env.AI_API_BASE_URL + '/chat/completions') : 'http://127.0.0.1:22217/v1/chat/completions',
+  model: process.env.AI_MODEL || 'deepseek-default',
+  apiKey: process.env.AI_API_KEY || ''
 };
 
 // 关键词提取和匹配辅助函数

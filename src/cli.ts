@@ -42,7 +42,7 @@ const api = () => {
 
 program
   .name('java-eight')
-  .description('Java八股文学习系统CLI')
+  .description('Java学习系统CLI')
   .version('1.0.0');
 
 // ============ 认证 ============
@@ -392,7 +392,7 @@ program
 // ============ AI生成题目 ============
 program
   .command('ai-generate')
-  .description('AI生成题目 — 指定主题自动生成八股文题目')
+  .description('AI生成题目 — 指定主题自动生成题目')
   .option('-t, --topic <topic>', '主题')
   .option('-c, --count <number>', '题目数量', '5')
   .action(async (options) => {

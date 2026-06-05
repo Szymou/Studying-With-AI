@@ -112,7 +112,7 @@ router.post('/:id/answer', async (req, res) => {
 
     await db.run(
       'INSERT INTO user_progress (user_id, question_id, is_correct, interaction_type, tech_domain, self_assessment, review_interval, ease_factor, next_review_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [userId, questionId, isCorrect, 'answer', tech_domain || question.tech_domain || 'java',
+      [userId, questionId, isCorrect, 'answer', tech_domain || question.tech_domain || '',
        self_assessment || null,
        sm2Result?.intervalHours || null,
        sm2Result?.easeFactor || null,
@@ -140,7 +140,7 @@ router.post('/:id/ai', async (req, res) => {
     // is_correct 不能为 null！因为数据库是 NOT NULL 约束！
     await db.run(
       'INSERT INTO user_progress (user_id, question_id, is_correct, interaction_type, tech_domain) VALUES (?, ?, ?, ?, ?)',
-      [userId, questionId, 0, 'ai', tech_domain || question.tech_domain || 'java']
+      [userId, questionId, 0, 'ai', tech_domain || question.tech_domain || '']
     );
 
     res.json({ success: true });

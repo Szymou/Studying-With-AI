@@ -20,3 +20,9 @@ ui-server.js
 start-ui.*
 run.sh
 server*.log
+
+# 管理面板（单独服务）
+/admin-panel/
+
+# 数据库文件
+data/

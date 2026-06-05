@@ -98,6 +98,22 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
+// 日志重定向到文件（用于管理面板查看）
+const logFile = path.join(__dirname, '../data/app.log');
+const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+const origLog = console.log;
+const origError = console.error;
+console.log = function(...args) {
+  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  logStream.write('[' + new Date().toISOString() + '] ' + msg + '\n');
+  origLog.apply(console, args);
+};
+console.error = function(...args) {
+  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  logStream.write('[' + new Date().toISOString() + '][ERROR] ' + msg + '\n');
+  origError.apply(console, args);
+};
+
 app.listen(Number(PORT), LISTENER, async () => {
   await db.initDb();
   console.log('Server running on http://localhost:' + PORT);

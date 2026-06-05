@@ -24,7 +24,7 @@ router.post('/:questionId', async (req, res) => {
 
     await db.run(
       'INSERT INTO favorites (user_id, question_id, source_type, tech_domain) VALUES (?, ?, ?, ?)',
-      [userId, questionId, sourceType || 'system', tech_domain || 'java']
+      [userId, questionId, sourceType || 'system', tech_domain || '']
     );
 
     res.json({ message: '收藏成功', questionId });
