@@ -496,6 +496,9 @@
             const u = document.getElementById('loginUsername').value;
             const p = document.getElementById('loginPassword').value;
             if (!u || !p) { toast('请输入用户名和密码', '⚠️'); return; }
+            if (u.length < 5) { toast('用户名至少 5 个字符', '⚠️'); return; }
+            if (/[\u4e00-\u9fa5]/.test(u)) { toast('用户名不能包含中文', '⚠️'); return; }
+            if (p.length < 8) { toast('密码至少 8 个字符', '⚠️'); return; }
             try {
                 await api('POST', '/api/auth/register', { username: u, password: p });
                 toast('注册成功，请登录', '🎉');
@@ -1545,17 +1548,81 @@
                 if (sel) sel.innerHTML = '<option value="">— 选择分类（可选）—</option>' +
                     cats.map(c => '<option value="' + c + '">' + c + '</option>').join('') +
                     '<option value="__custom__">✏️ 自定义主题</option>';
+                // 有分类时隐藏 AI建议 按钮
+                const aiBtn = document.getElementById('btnAiCategory');
+                if (aiBtn) aiBtn.style.display = cats.length > 0 ? 'none' : '';
             }).catch(() => {});
             form.innerHTML = '<h3>🤖 AI生成题目</h3>' +
-                '<div class="form-group"><label>分类（可选）</label><select id="genCat" onchange="onGenCatChange()" style="padding:8px;width:100%;border:1px solid var(--border-color);border-radius:6px;font-size:13px;background:var(--input-bg);color:var(--text-primary);"><option value="">加载中...</option></select></div>' +
+                '<div class="form-group"><label>分类（可选）</label><div style="display:flex;gap:8px;align-items:center;">' +
+                '<select id="genCat" onchange="onGenCatChange()" style="flex:1;padding:8px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;background:var(--input-bg);color:var(--text-primary);"><option value="">加载中...</option></select>' +
+                '<button class="btn btn-ai" id="btnAiCategory" onclick="aiSuggestCategories()" style="white-space:nowrap;flex-shrink:0;">🤖 AI建议</button></div></div>' +
                 '<div class="form-group" id="genCustomGroup" style="display:none;"><label>自定义主题</label><input id="genTopic" placeholder="例如：JVM垃圾回收" style="width:100%;"></div>' +
                 '<div class="form-group"><label>数量（1-20）</label><input id="genCount" value="5" style="width:100px;"></div>' +
                 '<div class="btn-group">' +
                 '<button class="btn btn-ai" onclick="doAIGenerate()">✨ 生成</button>' +
-                '<button class="btn btn-success" onclick="doAIAutoExpand()">📈 自动扩充</button>' +
+                '<button class="btn btn-success" id="btnAutoExpand" onclick="doAIAutoExpand()">📈 自动扩充</button>' +
                 '<button class="btn" onclick="this.parentElement.parentElement.remove()">取消</button></div>' +
                 '<div id="genResult" style="margin-top:10px;"></div>';
             ml.parentElement.insertBefore(form, ml);
+        }
+
+        // 统一处理 AI 返回的分类数组（支持 ["字符串"] 或 [{"name":"分类名"}]）
+        function parseCategoryArray(arr) {
+            if (!Array.isArray(arr)) return [];
+            return arr.map(item => {
+                if (typeof item === 'string') return item;
+                if (item && typeof item === 'object' && item.name) return item.name;
+                return String(item);
+            }).filter(Boolean);
+        }
+
+        // AI 为当前领域生成分类
+        async function aiSuggestCategories() {
+            const btn = document.getElementById('btnAiCategory');
+            if (!btn || btn.disabled) return;
+            if (!currentDomain) { toast('请先选择一个领域', '⚠️'); return; }
+            btn.disabled = true;
+            btn.textContent = '⏳ 生成中...';
+            try {
+                // 先创建对话
+                const r = await fetch(API_BASE + '/api/ai/chat/new', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ title: '生成分类-' + currentDomain.name })
+                });
+                const d = await r.json();
+                if (d.id) {
+                    // 再发消息获取AI回复（含领域上下文）
+                    const r2 = await fetch(API_BASE + '/api/ai/chat/' + d.id + '/message', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({ message: '请为"' + currentDomain.name + '"领域生成至少5个分类名称，只返回JSON字符串数组例如["分类1","分类2","分类3","分类4","分类5"]，不要对象不要其他文字。' })
+                    });
+                    const d2 = await r2.json();
+                    if (d2.reply) {
+                        let cats = [];
+                        const m = d2.reply.match(/\[[\s\S]*?\]/);
+                        if (m) { try { cats = parseCategoryArray(JSON.parse(m[0])); } catch(e) {} }
+                        if (cats.length >= 5) {
+                            const sel = document.getElementById('genCat');
+                            if (sel) {
+                                sel.innerHTML = '<option value="">— 选择分类 —</option>' +
+                                    cats.map(c => '<option value="' + c + '">' + c + '</option>').join('') +
+                                    '<option value="__custom__">✏️ 自定义主题</option>';
+                                btn.style.display = 'none';
+                                document.getElementById('btnAutoExpand').style.display = '';
+                                toast('✅ 已生成 ' + cats.length + ' 个分类', '🎯');
+                            }
+                        } else {
+                            toast('AI返回的分类不足5个，请重试', '⚠️');
+                        }
+                    }
+                }
+            } catch(e) {
+                toast('AI生成分类失败：' + e.message, '❌');
+            }
+            btn.disabled = false;
+            btn.textContent = '🤖 AI建议';
         }
 
         function onGenCatChange() {
@@ -1663,12 +1730,52 @@
                 }
                 const categories = Object.keys(catCount).sort((a, b) => catCount[b] - catCount[a]);
                 if (!categories.length) {
-                    res.innerHTML = '<div style="color:#ed8936;">⚠️ 当前领域暂无有效分类，请先添加题目</div>';
-                    _generating = false; if (btn) btn.disabled = false; return;
+                    // 无分类时先 AI 生成分类
+                    res.innerHTML = '<span class="loading">🤖 当前领域无分类，正在调用 AI 生成分类...</span>';
+                    try {
+                        const r = await fetch(API_BASE + '/api/ai/chat/new', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                            body: JSON.stringify({ title: '扩充分类-' + currentDomain.name })
+                        });
+                        const d = await r.json();
+                        let generatedCats = [];
+                        if (d.id) {
+                            const r2 = await fetch(API_BASE + '/api/ai/chat/' + d.id + '/message', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                                body: JSON.stringify({ message: '请为"' + currentDomain.name + '"领域生成至少5个分类名称，只返回JSON字符串数组例如["分类1","分类2","分类3","分类4","分类5"]，不要对象不要其他文字。' })
+                            });
+                            const d2 = await r2.json();
+                            if (d2.reply) {
+                                const m = d2.reply.match(/\[[\s\S]*?\]/);
+                                if (m) { try { generatedCats = parseCategoryArray(JSON.parse(m[0])); } catch(e) {} }
+                            }
+                        }
+                        if (generatedCats.length >= 3) {
+                            // 把生成的分类赋值到下拉框
+                            const sel = document.getElementById('genCat');
+                            if (sel) {
+                                sel.innerHTML = '<option value="">— 选择分类 —</option>' +
+                                    generatedCats.map(c => '<option value="' + c + '">' + c + '</option>').join('') +
+                                    '<option value="__custom__">✏️ 自定义主题</option>';
+                            }
+                            res.innerHTML = '<div style="color:#38a169;">✅ AI生成了 ' + generatedCats.length + ' 个分类，继续扩充题目...</div>';
+                            // 使用生成的分类
+                            window._autoExpandCats = generatedCats.slice(0, 10);
+                        } else {
+                            res.innerHTML = '<div style="color:#ed8936;">⚠️ AI生成分类失败，请稍后重试</div>';
+                            _generating = false; if (btn) btn.disabled = false; return;
+                        }
+                    } catch(e) {
+                        res.innerHTML = '<div style="color:#ed8936;">⚠️ 调用AI失败：' + e.message + '</div>';
+                        _generating = false; if (btn) btn.disabled = false; return;
+                    }
                 }
 
-                // 取前 10 个分类
-                const targets = categories.slice(0, 10);
+                // 取前 10 个分类（支持 AI 生成的临时分类）
+                const targets = (window._autoExpandCats || categories).slice(0, 10);
+                window._autoExpandCats = null;
                 let totalSaved = 0, totalSkipped = 0;
 
                 for (let i = 0; i < targets.length; i++) {

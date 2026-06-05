@@ -77,8 +77,8 @@ router.post('/ask', authMiddleware, async (req, res) => {
 
     const systemPrompt = await getPrompt('ai_assistant');
     const userPrompt = userAnswer
-        ? '问题：' + question + '\n用户的回答：' + userAnswer + '\n请评价是否正确，并给出标准答案（含代码示例）。'
-        : '问题：' + question + '\n。';
+        ? '问题：' + question + '\n用户的回答：' + userAnswer + '\n请评价是否正确，并给出标准答案。'
+        : '问题：' + question + '\n请给出标准答案。';
 
     try {
         let buffer = '';
@@ -286,7 +286,7 @@ router.post('/chat/:id/message', async (req, res) => {
     const messages = JSON.parse(convo.messages || '[]');
     messages.push({ role: 'user', content: message });
 
-    const reply = await callAi([{ role: 'system', content: '你是一个全栈程序员，用大白话讲技术。回答要通俗易懂，多举生活中的例子，像朋友聊天一样自然，别拽术语。' }, ...messages]);
+    const reply = await callAi([{ role: 'system', content: await getPrompt('ai_assistant') }, ...messages]);
     messages.push({ role: 'assistant', content: reply });
 
     const firstUserMsg = messages.find((m: any) => m.role === 'user');
@@ -427,7 +427,7 @@ router.post('/generate', async (req, res) => {
     );
     const existingList = existingQuestions.map((r: any) => r.question).filter(Boolean).join('\n');
     const excludeHint = existingList ? '\n\n当前领域已有以下题目，请避免生成重复或高度相似的题目：\n' + existingList : '';
-    const prompt = '你是一位' + domainName + '技术面试题专家。请生成' + finalCount + '道关于"' + topic + '"的' + domainName + '面试题。\n\n要求：\n1. 以严格JSON数组格式返回，不要包含任何其他文字说明\n2. 格式：[{"question":"问题","answer":"答案"}]\n3. 题目要有实际价值，贴近面试常见场景\n4. 答案简洁精炼，点到即止，不要长篇大论\n5. 用大白话回答，像在给同事讲解一样自然' + excludeHint;
+    const prompt = '你是一位' + domainName + '知识领域的老师。请生成' + finalCount + '道关于"' + topic + '"的' + domainName + '题目。\n\n要求：\n1. 以严格JSON数组格式返回，不要包含任何其他文字说明\n2. 格式：[{"question":"问题","answer":"答案"}]\n3. 题目要有实际价值\n4. 答案简洁精炼，点到即止，不要长篇大论\n5. 用大白话回答，像在给朋友讲解一样自然' + excludeHint;
 
     // 设置SSE响应头
     res.setHeader('Content-Type', 'text/event-stream');
@@ -565,7 +565,7 @@ router.post('/generate', async (req, res) => {
 // ============ AI生成新领域（SSE流式） ============
 router.post('/generate-domain', async (req, res) => {
   try {
-    const { description, language, code, icon, numQuestions = 5 } = req.body;
+    const { description, language, code, icon, numQuestions = 50 } = req.body;
     if (!description) {
       res.setHeader('Content-Type', 'application/json');
       return res.status(400).json({ success: false, message: '请提供领域描述' });

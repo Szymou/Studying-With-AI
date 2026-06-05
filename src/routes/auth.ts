@@ -10,6 +10,15 @@ router.post('/register', async (req, res) => {
   if (!username || !password) {
     return res.status(400).json({ error: '用户名和密码不能为空' });
   }
+  if (username.length < 5) {
+    return res.status(400).json({ error: '用户名至少 5 个字符' });
+  }
+  if (/[\u4e00-\u9fa5]/.test(username)) {
+    return res.status(400).json({ error: '用户名不能包含中文' });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: '密码至少 8 个字符' });
+  }
 
   try {
     const existing = await db.get('SELECT id FROM users WHERE username = ?', [username]);
